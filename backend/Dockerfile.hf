@@ -1,48 +1,22 @@
-FROM python:3.11-slim
-
-# HuggingFace Spaces Dockerfile
-# Compatible with free CPU tier
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# System deps
 RUN apt-get update && apt-get install -y \
-    git curl build-essential \
+    git curl build-essential nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# App code
 COPY . .
 
-# Setup dirs
-RUN mkdir -p /tmp/workspace /tmp/repos /tmp/devin_data
+RUN mkdir -p /tmp/god_workspace /tmp/workspace
 
-# HF runs as uid 1000
-RUN useradd -m -u 1000 user 2>/dev/null || true
-RUN chown -R 1000:1000 /app /tmp/workspace /tmp/repos /tmp/devin_data
-
-USER 1000
+ENV PYTHONUNBUFFERED=1
+ENV DB_PATH=/tmp/devin_agent.db
+ENV WORKSPACE_DIR=/tmp/god_workspace
 
 EXPOSE 7860
 
-ENV PORT=7860
-ENV HOST=0.0.0.0
-ENV DB_PATH=/tmp/devin_agent.db
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:7860/api/v1/health || exit 1
-
-CMD ["uvicorn", "main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "7860", \
-     "--workers", "1", \
-     "--loop", "asyncio", \
-     "--timeout-keep-alive", "75", \
-     "--log-level", "info"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

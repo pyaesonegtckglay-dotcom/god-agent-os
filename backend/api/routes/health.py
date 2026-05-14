@@ -1,5 +1,5 @@
 """
-Health + Status Routes
+Health + Status Routes — God Mode+ v3.0
 """
 
 import time
@@ -14,21 +14,53 @@ router = APIRouter()
 async def health(request: Request):
     ws = request.app.state.ws_manager
     engine = request.app.state.task_engine
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+    ai_router = getattr(request.app.state, "ai_router", None)
+    connector_manager = getattr(request.app.state, "connector_manager", None)
+
     stats = ws.get_stats()
+    cs = connector_manager.get_summary() if connector_manager else {}
+    ai_stats = ai_router.get_stats() if ai_router else {}
+
     return {
         "status": "healthy",
-        "version": "2.0.0",
+        "name": "GOD MODE+ AI Operating System",
+        "version": "3.0.0",
         "timestamp": time.time(),
-        "websocket_connections": stats["total_connections"],
-        "websocket_rooms": list(stats["rooms"].keys()),
-        "task_queue_size": engine._queue.qsize(),
-        "active_tasks": len(engine._active),
-        "llm": {
-            "openai": bool(os.environ.get("OPENAI_API_KEY")),
-            "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),
-            "model": os.environ.get("DEFAULT_MODEL", "gpt-4o"),
+        "platform": {
+            "mode": "god_mode_plus",
+            "agents": orchestrator.get_status()["agents"] if orchestrator else [],
+            "agent_count": orchestrator.get_status()["total_agents"] if orchestrator else 0,
         },
-        "github": bool(os.environ.get("GITHUB_TOKEN")),
+        "ai_router": {
+            "providers": {k: v["available"] for k, v in ai_stats.items()},
+            "ai_ready": any(v["available"] for v in ai_stats.values()),
+        },
+        "connectors": {
+            "connected": cs.get("connected", 0),
+            "total": cs.get("total", 0),
+            "ai_ready": cs.get("ai_ready", False),
+        },
+        "task_engine": {
+            "queue_size": engine._queue.qsize(),
+            "active_tasks": len(engine._active),
+        },
+        "websocket": {
+            "connections": stats["total_connections"],
+            "rooms": list(stats["rooms"].keys()),
+        },
+        "phases": [
+            "Phase 1: God Agent Orchestrator ✅",
+            "Phase 2: Sandbox Agent ✅",
+            "Phase 3: Connector System ✅",
+            "Phase 4: Autonomous Coding Engine ✅",
+            "Phase 5: Memory System ✅",
+            "Phase 6: Real-time Streaming ✅",
+            "Phase 7: Workflow Factor OS ✅",
+            "Phase 8: Modern UI Rebuild ✅",
+            "Phase 9: Multi-Model AI Router ✅",
+            "Phase 10-12: Observability + Security + God Mode+ ✅",
+        ],
     }
 
 

@@ -1,224 +1,252 @@
 'use client'
 
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { TimelineEvent, TaskStep } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
-import { memo, useState } from 'react'
 import {
-  CheckCircle, XCircle, Clock, Loader2, AlertTriangle,
-  ChevronDown, ChevronRight, Code2, Terminal, GitBranch,
-  Brain, Search, TestTube, Globe, Zap, Database
+  Zap, Code2, Bug, Brain, Plug, Rocket, Workflow, Terminal,
+  MessageSquare, CheckCircle2, XCircle, Clock, RefreshCw,
+  ChevronDown, Trash2, Activity, Bot, Palette
 } from 'lucide-react'
+import { useState } from 'react'
+import type { AgentName } from '@/hooks/useAgentStore'
 
-const TOOL_ICONS: Record<string, any> = {
-  code: Code2, shell: Terminal, github: GitBranch, memory: Brain,
-  search: Search, test: TestTube, browser: Globe, file: Database,
-  none: Zap,
+const AGENT_META: Record<string, { icon: React.ElementType; color: string }> = {
+  chat:      { icon: MessageSquare, color: '#22d3ee' },
+  planner:   { icon: Zap,           color: '#a78bfa' },
+  coding:    { icon: Code2,         color: '#34d399' },
+  debug:     { icon: Bug,           color: '#f87171' },
+  memory:    { icon: Brain,         color: '#fbbf24' },
+  connector: { icon: Plug,          color: '#60a5fa' },
+  deploy:    { icon: Rocket,        color: '#f472b6' },
+  workflow:  { icon: Workflow,      color: '#fb923c' },
+  sandbox:   { icon: Terminal,      color: '#4ade80' },
+  ui:        { icon: Palette,       color: '#e879f9' },
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  running: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
-  completed: 'text-green-400 bg-green-400/10 border-green-400/30',
-  failed: 'text-red-400 bg-red-400/10 border-red-400/30',
-  warning: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
-  pending: 'text-slate-500 bg-slate-500/10 border-slate-500/30',
+const EVENT_DISPLAY: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  task_created:         { label: 'Task Created',        icon: Zap,          color: '#6366f1' },
+  task_submitted:       { label: 'Task Submitted',      icon: Zap,          color: '#6366f1' },
+  task_queued:          { label: 'Task Queued',         icon: Clock,        color: '#94a3b8' },
+  task_started:         { label: 'Task Started',        icon: Activity,     color: '#22d3ee' },
+  task_completed:       { label: 'Task Complete',       icon: CheckCircle2, color: '#22c55e' },
+  task_failed:          { label: 'Task Failed',         icon: XCircle,      color: '#ef4444' },
+  orchestrator_start:   { label: 'Orchestrator Start',  icon: Bot,          color: '#6366f1' },
+  orchestrator_complete:{ label: 'Orchestrator Done',   icon: CheckCircle2, color: '#22c55e' },
+  intent_classified:    { label: 'Intent Classified',   icon: Brain,        color: '#a78bfa' },
+  agent_start:          { label: 'Agent Started',       icon: Zap,          color: '#818cf8' },
+  agent_called:         { label: 'Agent Called',        icon: Bot,          color: '#818cf8' },
+  plan_ready:           { label: 'Plan Ready',          icon: Zap,          color: '#a78bfa' },
+  tool_called:          { label: 'Tool Called',         icon: Code2,        color: '#34d399' },
+  tool_result:          { label: 'Tool Result',         icon: CheckCircle2, color: '#34d399' },
+  code_generated:       { label: 'Code Generated',      icon: Code2,        color: '#34d399' },
+  file_written:         { label: 'File Written',        icon: Terminal,     color: '#4ade80' },
+  sandbox_exec:         { label: 'Sandbox Exec',        icon: Terminal,     color: '#4ade80' },
+  sandbox_result:       { label: 'Sandbox Result',      icon: CheckCircle2, color: '#4ade80' },
+  workflow_generated:   { label: 'Workflow Generated',  icon: Workflow,     color: '#fb923c' },
+  deploy_plan_ready:    { label: 'Deploy Plan Ready',   icon: Rocket,       color: '#f472b6' },
+  connector_result:     { label: 'Connector Result',    icon: Plug,         color: '#60a5fa' },
+  self_heal_attempt:    { label: 'Self-Healing',        icon: RefreshCw,    color: '#f87171' },
+  self_heal_success:    { label: 'Healed ✓',           icon: CheckCircle2, color: '#22c55e' },
+  self_heal_failed:     { label: 'Heal Failed',         icon: XCircle,      color: '#ef4444' },
+  retry_attempt:        { label: 'Retry',               icon: RefreshCw,    color: '#f59e0b' },
+  llm_chunk:            { label: 'Streaming',           icon: Activity,     color: '#6366f1' },
+  stream_start:         { label: 'Stream Start',        icon: Activity,     color: '#22d3ee' },
+  stream_end:           { label: 'Stream End',          icon: CheckCircle2, color: '#22c55e' },
+  debug_complete:       { label: 'Debug Complete',      icon: Bug,          color: '#f87171' },
+  ui_generated:         { label: 'UI Generated',        icon: Palette,      color: '#e879f9' },
+  installing_packages:  { label: 'Installing Packages', icon: Terminal,     color: '#4ade80' },
+  github_op:            { label: 'GitHub Op',           icon: Plug,         color: '#60a5fa' },
 }
 
-const StatusIcon = ({ status }: { status: string }) => {
-  if (status === 'running') return <Loader2 size={12} className="text-blue-400 animate-spin" />
-  if (status === 'completed') return <CheckCircle size={12} className="text-green-400" />
-  if (status === 'failed') return <XCircle size={12} className="text-red-400" />
-  if (status === 'warning') return <AlertTriangle size={12} className="text-yellow-400" />
-  return <Clock size={12} className="text-slate-500" />
-}
-
-const TimelineItem = memo(({ event, isLast }: { event: TimelineEvent; isLast: boolean }) => {
+function EventCard({ event, index }: { event: any; index: number }) {
   const [expanded, setExpanded] = useState(false)
-  const ToolIcon = event.tool ? (TOOL_ICONS[event.tool] || Zap) : null
+  const meta = EVENT_DISPLAY[event.type] || { label: event.type, icon: Activity, color: '#6366f1' }
+  const Icon = meta.icon
+  const agentMeta = event.agent ? AGENT_META[event.agent] : null
+  const AgentIcon = agentMeta?.icon
+
+  // Skip raw llm_chunk events (too noisy)
+  if (event.type === 'llm_chunk') return null
+
   const hasData = event.data && Object.keys(event.data).length > 0
-  const time = formatDistanceToNow(new Date(event.timestamp * 1000), { addSuffix: true })
+  const dataStr = hasData ? JSON.stringify(event.data, null, 2) : null
 
   return (
-    <div className="flex gap-3 group">
-      {/* Connector line */}
-      <div className="flex flex-col items-center flex-shrink-0">
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center border flex-shrink-0 ${STATUS_STYLES[event.status] || STATUS_STYLES.pending}`}>
-          <StatusIcon status={event.status} />
-        </div>
-        {!isLast && <div className="w-px flex-1 bg-[#2a2b3d] mt-1 min-h-[16px]" />}
+    <div className="relative pl-6 pb-3 animate-fade-in">
+      {/* Line */}
+      <div className="absolute left-[11px] top-5 bottom-0 w-px" style={{ background: 'var(--border)' }} />
+
+      {/* Dot */}
+      <div className="absolute left-1.5 top-1.5 w-4 h-4 rounded-full flex items-center justify-center"
+        style={{ background: `${meta.color}20`, border: `1.5px solid ${meta.color}60` }}>
+        <div className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
       </div>
 
-      {/* Content */}
-      <div className="pb-3 flex-1 min-w-0">
-        <div
-          className={`rounded-lg p-2.5 border transition-all ${
-            event.status === 'running'
-              ? 'bg-[#1a1f3a] border-blue-500/30'
-              : 'bg-[#13141c] border-[#2a2b3d] hover:border-[#3a3b5a]'
-          } ${hasData ? 'cursor-pointer' : ''}`}
+      {/* Card */}
+      <div className="rounded-xl overflow-hidden transition-all"
+        style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
           onClick={() => hasData && setExpanded(!expanded)}
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              {ToolIcon && (
-                <span className="flex-shrink-0 p-1 rounded bg-[#1a1b26]">
-                  <ToolIcon size={10} className="text-brand-400" />
-                </span>
-              )}
-              <span className="text-xs font-medium text-slate-200 truncate">{event.label}</span>
+          <Icon size={12} style={{ color: meta.color, flexShrink: 0 }} />
+          <span className="text-xs font-medium flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+            {meta.label}
+          </span>
+
+          {/* Agent badge */}
+          {agentMeta && AgentIcon && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium"
+              style={{ background: `${agentMeta.color}15`, color: agentMeta.color, border: `1px solid ${agentMeta.color}30` }}>
+              <AgentIcon size={8} />
+              {event.agent}
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="text-[10px] text-slate-600">{time}</span>
-              {hasData && (
-                expanded
-                  ? <ChevronDown size={10} className="text-slate-500" />
-                  : <ChevronRight size={10} className="text-slate-500" />
-              )}
-            </div>
+          )}
+
+          {/* Time */}
+          <span className="text-[9px] ml-1 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+            {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+
+          {hasData && (
+            <ChevronDown size={10} style={{ color: 'var(--text-muted)', transform: expanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+          )}
+        </button>
+
+        {/* Data preview (collapsed) */}
+        {!expanded && hasData && (
+          <div className="px-3 pb-2">
+            <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+              {Object.entries(event.data).filter(([k]) => k !== 'chunk').slice(0, 3).map(([k, v]) =>
+                `${k}: ${typeof v === 'string' ? v.slice(0, 30) : JSON.stringify(v)}`
+              ).join(' · ')}
+            </p>
           </div>
+        )}
 
-          {event.description && (
-            <p className="text-[11px] text-slate-500 mt-1 truncate">{event.description}</p>
-          )}
-
-          {/* Expanded data */}
-          {expanded && hasData && (
-            <div className="mt-2 pt-2 border-t border-[#2a2b3d]">
-              <pre className="text-[10px] text-slate-400 font-mono overflow-auto max-h-32 whitespace-pre-wrap break-all">
-                {JSON.stringify(event.data, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-})
-TimelineItem.displayName = 'TimelineItem'
-
-// ─── Step Progress Bar ────────────────────────────────────────────────────────
-
-const StepProgress = ({ steps }: { steps: TaskStep[] }) => {
-  if (!steps.length) return null
-  const completed = steps.filter(s => s.status === 'completed').length
-  const percent = Math.round((completed / steps.length) * 100)
-
-  return (
-    <div className="px-4 py-3 border-b border-[#2a2b3d] bg-[#13141c]">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[11px] font-medium text-slate-400">Execution Progress</span>
-        <span className="text-[11px] font-mono text-brand-400">{completed}/{steps.length} steps</span>
-      </div>
-      <div className="h-1.5 bg-[#2a2b3d] rounded-full overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-brand-500 to-blue-400 rounded-full transition-all duration-500"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {steps.map((step) => (
-          <div
-            key={step.id}
-            title={step.name}
-            className={`h-1.5 rounded-full flex-1 min-w-[8px] max-w-[32px] transition-all ${
-              step.status === 'completed' ? 'bg-terminal-green' :
-              step.status === 'running' ? 'bg-blue-400 animate-pulse' :
-              step.status === 'failed' ? 'bg-red-400' :
-              'bg-[#2a2b3d]'
-            }`}
-          />
-        ))}
+        {/* Expanded data */}
+        {expanded && dataStr && (
+          <div className="px-3 pb-2 border-t" style={{ borderColor: 'var(--border)' }}>
+            <pre className="text-[9px] mt-2 overflow-auto max-h-32 font-mono leading-relaxed"
+              style={{ color: 'var(--text-secondary)' }}>
+              {dataStr}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ─── Main Timeline Component ──────────────────────────────────────────────────
-
 export default function ExecutionTimeline() {
-  const { timeline, activeSteps, activeTaskId, tasks, clearTimeline } = useAgentStore()
-  const activeTask = tasks.find(t => t.id === activeTaskId)
+  const { events, clearEvents, agents, locale } = useAgentStore()
+  const visibleEvents = events.filter(e => e.type !== 'llm_chunk')
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      queued: 'status-queued',
-      planning: 'status-planning',
-      executing: 'status-executing',
-      completed: 'status-completed',
-      failed: 'status-failed',
-      retrying: 'status-retrying',
-    }
-    return styles[status] || 'status-queued'
-  }
+  const activeAgents = Object.values(agents).filter(a => a.status === 'executing' || a.status === 'thinking')
 
   return (
-    <div className="flex flex-col h-full bg-[#0f1017]">
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg-2)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2b3d]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0"
+        style={{ borderColor: 'var(--border)', background: 'var(--bg-3)' }}>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-slate-200">Execution Timeline</span>
-          {activeTask && (
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${getStatusBadge(activeTask.status)}`}>
-              {activeTask.status}
+          <Activity size={14} className="text-indigo-400" />
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {locale === 'my' ? 'အချိန်ဇယား' : 'Execution Timeline'}
+          </span>
+          {visibleEvents.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+              style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)' }}>
+              {visibleEvents.length}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-600 font-mono">{timeline.length} events</span>
-          {timeline.length > 0 && (
-            <button
-              onClick={clearTimeline}
-              className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors px-2 py-0.5 rounded border border-[#2a2b3d] hover:border-[#3a3b5a]"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+        {visibleEvents.length > 0 && (
+          <button onClick={clearEvents}
+            className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+            title="Clear timeline">
+            <Trash2 size={12} className="text-red-400/60 hover:text-red-400" />
+          </button>
+        )}
       </div>
 
-      {/* Active task info */}
-      {activeTask && (
-        <div className="px-4 py-2.5 bg-[#13141c] border-b border-[#2a2b3d]">
-          <p className="text-[11px] text-slate-400 font-mono truncate">
-            <span className="text-slate-600">Goal: </span>{activeTask.goal.slice(0, 100)}
-          </p>
-          {activeTask.retry_count > 0 && (
-            <p className="text-[10px] text-yellow-400 mt-0.5">↻ Retry #{activeTask.retry_count}</p>
-          )}
+      {/* Active Agents Banner */}
+      {activeAgents.length > 0 && (
+        <div className="px-3 py-2 border-b flex items-center gap-2 flex-wrap"
+          style={{ borderColor: 'var(--border)', background: 'rgba(99,102,241,0.05)' }}>
+          <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            {locale === 'my' ? 'အသုံးပြုနေသော Agent များ:' : 'Active:'}
+          </span>
+          {activeAgents.map(a => {
+            const meta = AGENT_META[a.name]
+            const Icon = meta?.icon
+            return Icon ? (
+              <div key={a.name} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px]"
+                style={{ background: `${meta.color}12`, color: meta.color, border: `1px solid ${meta.color}25` }}>
+                <Icon size={8} />
+                {a.name}
+              </div>
+            ) : null
+          })}
         </div>
       )}
 
-      {/* Step progress */}
-      <StepProgress steps={activeSteps} />
-
-      {/* Timeline events */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {timeline.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="text-4xl mb-3 opacity-30">⏱️</div>
-            <p className="text-sm text-slate-500">No events yet</p>
-            <p className="text-xs text-slate-600 mt-1">Submit a task to see live execution</p>
+      {/* Events */}
+      <div className="flex-1 overflow-y-auto p-3">
+        {visibleEvents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-8">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
+              <Activity size={20} style={{ color: 'var(--text-muted)' }} />
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                {locale === 'my' ? 'အချိန်ဇယားအလွတ်' : 'No events yet'}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {locale === 'my'
+                  ? 'Task တစ်ခုဖန်တီးပါ — Real-time events တွေ့ရမည်'
+                  : 'Create a task to see real-time execution events'}
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-0">
-            {[...timeline].reverse().map((event, i) => (
-              <TimelineItem
-                key={event.id}
-                event={event}
-                isLast={i === timeline.length - 1}
-              />
+          <div>
+            {[...visibleEvents].reverse().map((ev, i) => (
+              <EventCard key={ev.id} event={ev} index={i} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Active task result */}
-      {activeTask?.result && (
-        <div className="px-4 py-3 border-t border-[#2a2b3d] bg-[#13141c]">
-          <div className="text-[10px] text-terminal-green font-mono mb-1">✓ Result</div>
-          <p className="text-[11px] text-slate-300 line-clamp-3">{activeTask.result}</p>
+      {/* Agent Grid */}
+      <div className="border-t p-3 shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+          {locale === 'my' ? 'Agent အားလုံး' : 'All Agents'}
+        </p>
+        <div className="grid grid-cols-5 gap-1">
+          {Object.entries(AGENT_META).map(([name, meta]) => {
+            const Icon = meta.icon
+            const agent = useAgentStore.getState().agents[name as AgentName]
+            const isActive = agent?.status === 'executing' || agent?.status === 'thinking'
+            return (
+              <div key={name} title={`${name}: ${agent?.status || 'idle'}`}
+                className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all"
+                style={{
+                  background: isActive ? `${meta.color}10` : 'transparent',
+                  border: `1px solid ${isActive ? meta.color + '30' : 'transparent'}`,
+                }}>
+                <Icon size={12} style={{ color: isActive ? meta.color : 'var(--text-muted)' }} />
+                <span className="text-[8px] capitalize" style={{ color: isActive ? meta.color : 'var(--text-muted)' }}>
+                  {name}
+                </span>
+                {isActive && <div className="w-1 h-1 rounded-full animate-pulse" style={{ background: meta.color }} />}
+              </div>
+            )
+          })}
         </div>
-      )}
+      </div>
     </div>
   )
 }

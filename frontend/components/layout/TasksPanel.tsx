@@ -1,168 +1,154 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { Task } from '@/types'
+import { getTasks, cancelTask, retryTask } from '@/lib/api'
+import { ListTodo, Play, Square, RefreshCw, Clock, CheckCircle2, XCircle, Loader2, Zap } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { RefreshCcw, XCircle, ChevronDown, ChevronUp, Terminal } from 'lucide-react'
-import { useState } from 'react'
-import { retryTask, cancelTask } from '@/lib/api'
 
-const STATUS_BADGE: Record<string, string> = {
-  queued: 'bg-slate-800 text-slate-400 border-slate-700',
-  initializing: 'bg-blue-900/30 text-blue-400 border-blue-700/30',
-  planning: 'bg-purple-900/30 text-purple-400 border-purple-700/30',
-  executing: 'bg-cyan-900/30 text-cyan-400 border-cyan-700/30',
-  retrying: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/30',
-  completed: 'bg-green-900/30 text-green-400 border-green-700/30',
-  failed: 'bg-red-900/30 text-red-400 border-red-700/30',
-  cancelled: 'bg-slate-800 text-slate-500 border-slate-700',
-}
-
-function TaskCard({ task }: { task: Task }) {
-  const [expanded, setExpanded] = useState(false)
-  const store = useAgentStore()
-  const isActive = store.activeTaskId === task.id
-  const time = formatDistanceToNow(new Date(task.created_at * 1000), { addSuffix: true })
-  const duration = task.completed_at && task.started_at
-    ? `${Math.round(task.completed_at - task.started_at)}s`
-    : null
-
-  return (
-    <div className={`rounded-xl border transition-all ${
-      isActive ? 'border-brand-500/40 bg-[#1a1f3a]' : 'border-[#2a2b3d] bg-[#13141c] hover:border-[#3a3b5a]'
-    }`}>
-      <div
-        className="p-3 cursor-pointer"
-        onClick={() => { store.setActiveTask(task.id); setExpanded(!expanded) }}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-200 leading-relaxed line-clamp-2">{task.goal}</p>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${STATUS_BADGE[task.status] || STATUS_BADGE.queued}`}>
-                {task.status}
-              </span>
-              <span className="text-[10px] text-slate-600 font-mono">{task.id.slice(0, 14)}</span>
-              {duration && <span className="text-[10px] text-slate-600">⏱ {duration}</span>}
-              {task.retry_count > 0 && (
-                <span className="text-[10px] text-yellow-500">↻ {task.retry_count}</span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {task.status === 'failed' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); retryTask(task.id) }}
-                className="p-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 transition-all"
-                title="Retry"
-              >
-                <RefreshCcw size={11} />
-              </button>
-            )}
-            {['queued','executing','planning'].includes(task.status) && (
-              <button
-                onClick={(e) => { e.stopPropagation(); cancelTask(task.id) }}
-                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
-                title="Cancel"
-              >
-                <XCircle size={11} />
-              </button>
-            )}
-            {expanded ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
-          </div>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="px-3 pb-3 border-t border-[#2a2b3d] pt-2.5 space-y-2">
-          {/* Plan steps */}
-          {task.plan?.steps && task.plan.steps.length > 0 && (
-            <div>
-              <p className="text-[10px] text-slate-500 font-semibold mb-1.5">📋 Plan ({task.plan.steps.length} steps)</p>
-              <div className="space-y-1">
-                {task.plan.steps.map((step, i) => (
-                  <div key={step.id} className="flex items-center gap-2 text-[11px]">
-                    <span className="text-slate-600 font-mono w-4">{i+1}.</span>
-                    <span className={
-                      step.status === 'completed' ? 'text-terminal-green' :
-                      step.status === 'running' ? 'text-blue-400' :
-                      step.status === 'failed' ? 'text-red-400' :
-                      'text-slate-500'
-                    }>{step.name}</span>
-                    {step.tool && <span className="text-[9px] text-slate-600 bg-[#1a1b26] px-1 rounded">{step.tool}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Result */}
-          {task.result && (
-            <div>
-              <p className="text-[10px] text-slate-500 font-semibold mb-1">✅ Result</p>
-              <div className="terminal p-2 text-[11px] text-terminal-green max-h-24 overflow-y-auto">
-                {task.result.slice(0, 500)}
-              </div>
-            </div>
-          )}
-
-          {/* Error */}
-          {task.error && (
-            <div>
-              <p className="text-[10px] text-slate-500 font-semibold mb-1">❌ Error</p>
-              <div className="terminal p-2 text-[11px] text-red-400 max-h-24 overflow-y-auto">
-                {task.error}
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3 text-[10px] text-slate-600 pt-1">
-            <span>Created {time}</span>
-            {task.session_id && <span className="font-mono">sess: {task.session_id.slice(0,10)}</span>}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+const STATUS_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+  queued:    { icon: Clock,        color: '#94a3b8', label: 'Queued' },
+  executing: { icon: Loader2,      color: '#6366f1', label: 'Running' },
+  completed: { icon: CheckCircle2, color: '#22c55e', label: 'Done' },
+  failed:    { icon: XCircle,      color: '#ef4444', label: 'Failed' },
+  cancelled: { icon: Square,       color: '#64748b', label: 'Cancelled' },
 }
 
 export default function TasksPanel() {
-  const { tasks } = useAgentStore()
-  const active = tasks.filter(t => ['queued','initializing','planning','executing','retrying'].includes(t.status))
-  const done = tasks.filter(t => ['completed','failed','cancelled'].includes(t.status))
+  const { sessionId, locale, setActiveTaskId, activeTaskId } = useAgentStore()
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await getTasks(sessionId, 30)
+      setTasks(Array.isArray(data) ? data : data.tasks || [])
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [sessionId])
+  useEffect(() => {
+    const id = setInterval(load, 5000)
+    return () => clearInterval(id)
+  }, [sessionId])
+
+  const handleCancel = async (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    await cancelTask(taskId)
+    load()
+  }
+
+  const handleRetry = async (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    await retryTask(taskId)
+    load()
+  }
 
   return (
-    <div className="flex flex-col h-full bg-[#0f1017]">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2b3d]">
-        <span className="text-sm font-semibold text-slate-200">Task Manager</span>
-        <span className="text-[10px] text-slate-600">{tasks.length} total</span>
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg-2)' }}>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0"
+        style={{ borderColor: 'var(--border)', background: 'var(--bg-3)' }}>
+        <div className="flex items-center gap-2">
+          <ListTodo size={14} className="text-indigo-400" />
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {locale === 'my' ? 'လုပ်ငန်းများ' : 'Tasks'}
+          </span>
+          {tasks.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+              style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)' }}>
+              {tasks.length}
+            </span>
+          )}
+        </div>
+        <button onClick={load} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+          <RefreshCw size={12} style={{ color: 'var(--text-muted)' }} className={loading ? 'animate-spin' : ''} />
+        </button>
       </div>
+
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Terminal size={32} className="text-slate-700 mb-3" />
-            <p className="text-sm text-slate-500">No tasks yet</p>
-            <p className="text-xs text-slate-600 mt-1">Submit a goal to create tasks</p>
+        {loading && tasks.length === 0 ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-20 rounded-xl shimmer" />
+            ))}
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 py-8">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
+              <ListTodo size={20} style={{ color: 'var(--text-muted)' }} />
+            </div>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {locale === 'my' ? 'လုပ်ငန်းမရှိသေးပါ' : 'No tasks yet'}
+            </p>
           </div>
         ) : (
-          <>
-            {active.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2 px-1">
-                  Active ({active.length})
-                </p>
-                <div className="space-y-2">{active.map(t => <TaskCard key={t.id} task={t} />)}</div>
-              </div>
-            )}
-            {done.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2 px-1 mt-3">
-                  Completed ({done.length})
-                </p>
-                <div className="space-y-2">{done.map(t => <TaskCard key={t.id} task={t} />)}</div>
-              </div>
-            )}
-          </>
+          tasks.map(task => {
+            const sm = STATUS_META[task.status] || STATUS_META.queued
+            const Icon = sm.icon
+            const isActive = task.id === activeTaskId
+            const isRunning = task.status === 'executing' || task.status === 'queued'
+
+            return (
+              <button key={task.id} onClick={() => setActiveTaskId(isActive ? null : task.id)}
+                className="w-full rounded-xl p-3 text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+                style={{
+                  background: isActive ? 'rgba(99,102,241,0.1)' : 'var(--bg-3)',
+                  border: `1px solid ${isActive ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
+                }}>
+                <div className="flex items-start gap-2">
+                  <div className="mt-0.5 flex-shrink-0">
+                    <Icon size={13} style={{
+                      color: sm.color,
+                      animation: task.status === 'executing' ? 'spin 1.5s linear infinite' : 'none',
+                    }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {task.goal}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{ background: `${sm.color}15`, color: sm.color, border: `1px solid ${sm.color}30` }}>
+                        {sm.label}
+                      </span>
+                      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                        {formatDistanceToNow(new Date(task.created_at * 1000), { addSuffix: true })}
+                      </span>
+                    </div>
+                    <p className="text-[9px] mt-1 font-mono truncate" style={{ color: 'var(--text-muted)' }}>
+                      {task.id}
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-1 ml-1">
+                    {isRunning && (
+                      <button onClick={e => handleCancel(task.id, e)}
+                        className="p-1 rounded-lg hover:bg-red-500/10 transition-colors" title="Cancel">
+                        <Square size={10} className="text-red-400" />
+                      </button>
+                    )}
+                    {task.status === 'failed' && (
+                      <button onClick={e => handleRetry(task.id, e)}
+                        className="p-1 rounded-lg hover:bg-indigo-500/10 transition-colors" title="Retry">
+                        <RefreshCw size={10} className="text-indigo-400" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar for running tasks */}
+                {isRunning && (
+                  <div className="mt-2 h-0.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                    <div className="h-full rounded-full animate-pulse" style={{ background: sm.color, width: '60%' }} />
+                  </div>
+                )}
+              </button>
+            )
+          })
         )}
       </div>
     </div>
