@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
 import { sandboxExecute, sandboxWriteFile, getWorkspaceInfo } from '@/lib/api'
-import { Terminal, Play, FolderOpen, File, RefreshCw, ChevronRight, Zap } from 'lucide-react'
+import { Terminal, Play, FolderOpen, File, RefreshCw, ChevronRight, Zap, ExternalLink, Code2 } from 'lucide-react'
+
+const VSCODE_HF_URL = 'https://pyae1994-god-agent-vscode.hf.space'
 
 interface TerminalLine {
   type: 'input' | 'output' | 'error'
@@ -20,7 +22,7 @@ export default function SandboxPanel() {
   ])
   const [loading, setLoading] = useState(false)
   const [workspace, setWorkspace] = useState<any>(null)
-  const [tab, setTab] = useState<'terminal' | 'files'>('terminal')
+  const [tab, setTab] = useState<'terminal' | 'files' | 'vscode'>('terminal')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<string[]>([])
@@ -90,14 +92,14 @@ export default function SandboxPanel() {
           <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
         </div>
         <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: 'var(--bg-0)', border: '1px solid var(--border)' }}>
-          {(['terminal', 'files'] as const).map(t => (
+          {(['terminal', 'files', 'vscode'] as const).map(t => (
             <button key={t} onClick={() => { setTab(t); if (t === 'files') loadWorkspace() }}
               className="px-2.5 py-0.5 rounded-md text-[10px] font-medium transition-all capitalize"
               style={{
                 background: tab === t ? 'var(--brand)' : 'transparent',
                 color: tab === t ? '#fff' : 'var(--text-muted)',
               }}>
-              {t}
+              {t === 'vscode' ? '⚡ VS Code' : t}
             </button>
           ))}
         </div>
@@ -161,7 +163,7 @@ export default function SandboxPanel() {
             </button>
           </div>
         </>
-      ) : (
+      ) : tab === 'files' ? (
         /* Files tab */
         <div className="flex-1 overflow-y-auto p-3">
           <div className="flex items-center justify-between mb-2">
@@ -189,6 +191,50 @@ export default function SandboxPanel() {
               </p>
             </div>
           )}
+        </div>
+      ) : (
+        /* VS Code tab */
+        <div className="flex flex-col h-full">
+          {/* VS Code info bar */}
+          <div className="px-3 py-2 border-b flex items-center justify-between"
+            style={{ borderColor: 'var(--border)', background: 'var(--bg-3)' }}>
+            <div className="flex items-center gap-2">
+              <Code2 size={12} style={{ color: 'var(--brand)' }} />
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                VS Code — God Agent Sandbox
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono"
+                style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}>
+                LIVE
+              </span>
+            </div>
+            <a href={VSCODE_HF_URL} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-all hover:opacity-80"
+              style={{ background: 'var(--brand)', color: '#fff' }}>
+              <ExternalLink size={10} />
+              Open Full
+            </a>
+          </div>
+
+          {/* Password hint */}
+          <div className="px-3 py-1.5 border-b flex items-center gap-2"
+            style={{ borderColor: 'var(--border)', background: 'rgba(99,102,241,0.05)' }}>
+            <Zap size={10} style={{ color: 'var(--brand)' }} />
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Password: <code className="px-1 rounded font-mono" style={{ background: 'var(--bg-0)', color: 'var(--text-secondary)' }}>godagent2024</code>
+            </span>
+          </div>
+
+          {/* VS Code iframe */}
+          <div className="flex-1 relative">
+            <iframe
+              src={VSCODE_HF_URL}
+              className="w-full h-full border-0"
+              title="God Agent VS Code Sandbox"
+              allow="clipboard-read; clipboard-write"
+              sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation"
+            />
+          </div>
         </div>
       )}
     </div>
