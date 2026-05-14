@@ -1,122 +1,163 @@
-// ─── API Client Library ────────────────────────────────────────────────────────
+/**
+ * God Mode+ API Client
+ */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7860'
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:7860'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-export const getApiUrl = () => API_URL
-export const getWsUrl = () => WS_URL
-
-// ─── Task API ─────────────────────────────────────────────────────────────────
-
-export async function createTask(goal: string, sessionId: string, projectId = '') {
-  const res = await fetch(`${API_URL}/api/v1/tasks/create`, {
-    method: 'POST',
+async function apiFetch(path: string, options?: RequestInit) {
+  const res = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ goal, session_id: sessionId, project_id: projectId, stream: true }),
+    ...options,
   })
-  if (!res.ok) throw new Error(`Create task failed: ${res.statusText}`)
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
   return res.json()
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+export async function createTask(goal: string, sessionId: string, options?: {
+  githubRepo?: string
+  autoCommit?: boolean
+  metadata?: Record<string, any>
+}) {
+  return apiFetch('/api/v1/tasks/', {
+    method: 'POST',
+    body: JSON.stringify({
+      goal,
+      session_id: sessionId,
+      github_repo: options?.githubRepo || '',
+      auto_commit: options?.autoCommit || false,
+      metadata: options?.metadata || {},
+    }),
+  })
 }
 
 export async function getTask(taskId: string) {
-  const res = await fetch(`${API_URL}/api/v1/tasks/${taskId}`)
-  if (!res.ok) throw new Error(`Get task failed: ${res.statusText}`)
-  return res.json()
+  return apiFetch(`/api/v1/tasks/${taskId}`)
 }
 
-export async function getTaskStatus(taskId: string) {
-  const res = await fetch(`${API_URL}/api/v1/tasks/${taskId}/status`)
-  if (!res.ok) throw new Error(`Get status failed: ${res.statusText}`)
-  return res.json()
+export async function getTasks(sessionId?: string, limit = 50) {
+  const q = sessionId ? `?session_id=${sessionId}&limit=${limit}` : `?limit=${limit}`
+  return apiFetch(`/api/v1/tasks/${q}`)
 }
 
-export async function cancelTask(taskId: string, reason = 'User cancelled') {
-  const res = await fetch(`${API_URL}/api/v1/tasks/${taskId}/cancel`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reason }),
-  })
-  if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`)
-  return res.json()
+export async function cancelTask(taskId: string) {
+  return apiFetch(`/api/v1/tasks/${taskId}/cancel`, { method: 'POST' })
 }
 
 export async function retryTask(taskId: string) {
-  const res = await fetch(`${API_URL}/api/v1/tasks/${taskId}/retry`, {
+  return apiFetch(`/api/v1/tasks/${taskId}/retry`, { method: 'POST' })
+}
+
+export async function getTaskEvents(taskId: string) {
+  return apiFetch(`/api/v1/tasks/${taskId}/events`)
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+export async function streamChatSSE(
+  messages: Array<{ role: string; content: string }>,
+  sessionId: string,
+  onChunk: (chunk: string) => void,
+  onComplete: (full: string) => void,
+  onError: (err: string) => void,
+) {
+  try {
+    const res = await fetch(`${API_URL}/api/v1/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, session_id: sessionId }),
+    })
+    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.body) throw new Error('No body')
+
+    const reader = res.body.getReader()
+    const dec = new TextDecoder()
+    let full = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const text = dec.decode(value, { stream: true })
+      for (const line of text.split('\n')) {
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trim()
+        if (data === '[DONE]') { onComplete(full); return }
+        try {
+          const obj = JSON.parse(data)
+          const chunk = obj.chunk || obj.content || obj.delta || ''
+          if (chunk) { full += chunk; onChunk(chunk) }
+        } catch {}
+      }
+    }
+    onComplete(full)
+  } catch (e: any) {
+    onError(e.message)
+  }
+}
+
+// ─── Orchestrator ─────────────────────────────────────────────────────────────
+export async function orchestrate(message: string, sessionId: string, context?: Record<string, any>) {
+  return apiFetch('/api/v1/agents/orchestrate', {
     method: 'POST',
+    body: JSON.stringify({ message, session_id: sessionId, context: context || {} }),
   })
-  if (!res.ok) throw new Error(`Retry failed: ${res.statusText}`)
-  return res.json()
 }
 
-export async function listTasks(sessionId = '') {
-  const url = sessionId
-    ? `${API_URL}/api/v1/tasks/?session_id=${sessionId}`
-    : `${API_URL}/api/v1/tasks/`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`List tasks failed: ${res.statusText}`)
-  return res.json()
+// ─── Memory ───────────────────────────────────────────────────────────────────
+export async function getMemory(sessionId: string, limit = 20) {
+  return apiFetch(`/api/v1/memory/?session_id=${sessionId}&limit=${limit}`)
 }
 
-export async function generatePlan(goal: string, sessionId: string) {
-  const res = await fetch(`${API_URL}/api/v1/plan`, {
+export async function searchMemory(query: string, sessionId?: string) {
+  const q = sessionId ? `?q=${encodeURIComponent(query)}&session_id=${sessionId}` : `?q=${encodeURIComponent(query)}`
+  return apiFetch(`/api/v1/memory/search${q}`)
+}
+
+// ─── Connectors ───────────────────────────────────────────────────────────────
+export async function getConnectors() {
+  return apiFetch('/api/v1/connectors/')
+}
+
+export async function getConnectorSummary() {
+  return apiFetch('/api/v1/connectors/summary')
+}
+
+export async function setConnectorToken(connectorId: string, token: string) {
+  return apiFetch('/api/v1/connectors/set-token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ goal, session_id: sessionId, stream: false }),
+    body: JSON.stringify({ connector_id: connectorId, token }),
   })
-  if (!res.ok) throw new Error(`Plan failed: ${res.statusText}`)
-  return res.json()
 }
 
-// ─── Chat API (non-streaming) ─────────────────────────────────────────────────
-
-export async function sendChatMessage(messages: any[], sessionId: string, stream = false) {
-  const res = await fetch(`${API_URL}/api/v1/chat`, {
+// ─── Sandbox ──────────────────────────────────────────────────────────────────
+export async function sandboxExecute(command: string, cwd?: string) {
+  return apiFetch('/api/v1/agents/sandbox/execute', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, session_id: sessionId, stream }),
+    body: JSON.stringify({ command, cwd: cwd || '' }),
   })
-  if (!res.ok) throw new Error(`Chat failed: ${res.statusText}`)
-  return res.json()
 }
 
-// ─── GitHub API ───────────────────────────────────────────────────────────────
+export async function sandboxWriteFile(filename: string, content: string) {
+  return apiFetch('/api/v1/agents/sandbox/file', {
+    method: 'POST',
+    body: JSON.stringify({ filename, content }),
+  })
+}
 
+export async function getWorkspaceInfo() {
+  return apiFetch('/api/v1/agents/sandbox/workspace')
+}
+
+// ─── AI Router ────────────────────────────────────────────────────────────────
+export async function getAIRouterStats() {
+  return apiFetch('/api/v1/agents/ai-router/stats')
+}
+
+// ─── GitHub ───────────────────────────────────────────────────────────────────
 export async function getGitHubStatus() {
-  try {
-    const res = await fetch(`${API_URL}/api/v1/github/status`)
-    if (!res.ok) return { configured: false }
-    return res.json()
-  } catch {
-    return { configured: false }
-  }
+  return apiFetch('/api/v1/github/status')
 }
 
-// ─── Health API ───────────────────────────────────────────────────────────────
-
+// ─── Health ───────────────────────────────────────────────────────────────────
 export async function getHealth() {
-  try {
-    const res = await fetch(`${API_URL}/api/v1/health`)
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
-  }
-}
-
-// ─── Memory API ───────────────────────────────────────────────────────────────
-
-export async function searchMemory(query: string, sessionId = '') {
-  const res = await fetch(`${API_URL}/api/v1/memory/search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, session_id: sessionId, limit: 10 }),
-  })
-  if (!res.ok) return { results: [] }
-  return res.json()
-}
-
-export async function getHistory(sessionId: string) {
-  const res = await fetch(`${API_URL}/api/v1/memory/history/${sessionId}`)
-  if (!res.ok) return { history: [] }
-  return res.json()
+  return apiFetch('/api/v1/health')
 }

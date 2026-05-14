@@ -1,98 +1,112 @@
 'use client'
 
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { useEffect, useState } from 'react'
-import { getHealth } from '@/lib/api'
-import { Activity, Cpu, MemoryStick, Wifi, WifiOff, Github, ExternalLink } from 'lucide-react'
+import { t } from '@/lib/i18n'
+import { Menu, Zap, Globe, Moon, Sun, MonitorSmartphone, Sparkles, Cpu } from 'lucide-react'
+import type { Theme, Locale } from '@/hooks/useAgentStore'
+
+const THEMES: { id: Theme; label: string; icon: string }[] = [
+  { id: 'dark',   label: 'Dark',   icon: '🌙' },
+  { id: 'light',  label: 'Light',  icon: '☀️' },
+  { id: 'amoled', label: 'AMOLED', icon: '⬛' },
+  { id: 'neon',   label: 'Neon',   icon: '🌊' },
+  { id: 'glass',  label: 'Glass',  icon: '🔮' },
+]
 
 export default function TopBar() {
-  const { wsConnected, backendHealth, setBackendHealth, sessionId } = useAgentStore()
-  const [metrics, setMetrics] = useState<any>(null)
+  const { theme, locale, setTheme, setLocale, sidebarOpen, setSidebarOpen, agents } = useAgentStore()
 
-  useEffect(() => {
-    const fetchHealth = async () => {
-      const h = await getHealth()
-      setBackendHealth(h)
-    }
-    fetchHealth()
-    const interval = setInterval(fetchHealth, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  const activeAgents = Object.values(agents).filter(a => a.status === 'executing' || a.status === 'thinking').length
+  const allIdle = Object.values(agents).every(a => a.status === 'idle')
 
   return (
-    <header className="h-10 bg-[#0c0d12] border-b border-[#2a2b3d] flex items-center px-4 gap-4 flex-shrink-0">
-      {/* Brand */}
-      <div className="flex items-center gap-2">
-        <div className="w-5 h-5 rounded bg-gradient-to-br from-brand-500 to-blue-500 flex items-center justify-center text-[9px] font-bold text-white">D</div>
-        <span className="text-xs font-semibold text-slate-300 hidden sm:block">Devin Agent Platform</span>
-        <span className="text-[10px] text-slate-600 hidden md:block">v2.0</span>
-      </div>
+    <header className="h-12 flex items-center justify-between px-3 border-b shrink-0"
+      style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}>
 
-      <div className="h-4 w-px bg-[#2a2b3d]" />
-
-      {/* Backend Status */}
+      {/* Left */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          {backendHealth ? (
-            <div className="w-1.5 h-1.5 rounded-full bg-terminal-green animate-pulse" />
-          ) : (
-            <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-          )}
-          <span className={`text-[10px] ${backendHealth ? 'text-terminal-green' : 'text-red-400'}`}>
-            {backendHealth ? 'API Online' : 'API Offline'}
-          </span>
-        </div>
+        <button onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+          <Menu size={16} style={{ color: 'var(--text-secondary)' }} />
+        </button>
 
-        {/* WS Status */}
-        <div className="flex items-center gap-1">
-          {wsConnected
-            ? <Wifi size={10} className="text-blue-400" />
-            : <WifiOff size={10} className="text-slate-500" />
-          }
-          <span className={`text-[10px] ${wsConnected ? 'text-blue-400' : 'text-slate-500'}`}>
-            {wsConnected ? 'WS Live' : 'WS Off'}
-          </span>
-        </div>
-
-        {/* LLM status */}
-        {backendHealth?.llm && (
-          <div className="items-center gap-1 hidden md:flex">
-            <div className={`w-1.5 h-1.5 rounded-full ${backendHealth.llm.openai || backendHealth.llm.anthropic ? 'bg-purple-400' : 'bg-slate-600'}`} />
-            <span className={`text-[10px] ${backendHealth.llm.openai || backendHealth.llm.anthropic ? 'text-purple-400' : 'text-slate-500'}`}>
-              {backendHealth.llm.openai ? 'GPT-4' : backendHealth.llm.anthropic ? 'Claude' : 'Demo Mode'}
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <Zap size={14} className="text-white" />
+          </div>
+          <div className="hidden sm:block">
+            <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>God Mode+</span>
+            <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded-full text-purple-300 font-semibold"
+              style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)' }}>
+              v3.0
             </span>
           </div>
-        )}
-      </div>
-
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* Session ID */}
-      <div className="hidden lg:flex items-center gap-1.5 bg-[#1a1b26] px-2 py-1 rounded border border-[#2a2b3d]">
-        <span className="text-[10px] text-slate-600">Session:</span>
-        <span className="text-[10px] font-mono text-slate-400">{sessionId.slice(0, 14)}</span>
-      </div>
-
-      {/* GitHub */}
-      {backendHealth?.github && (
-        <div className="flex items-center gap-1 text-slate-400">
-          <Github size={12} />
-          <span className="text-[10px] text-terminal-green hidden sm:block">GitHub</span>
         </div>
-      )}
+      </div>
 
-      {/* Docs link */}
-      <a
-        href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7860'}/api/docs`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
-        title="API Docs"
-      >
-        <ExternalLink size={11} />
-        <span className="text-[10px] hidden sm:block">API</span>
-      </a>
+      {/* Center — Agent Status */}
+      <div className="hidden md:flex items-center gap-2">
+        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+          activeAgents > 0
+            ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-300'
+            : 'bg-white/5 border border-white/10 text-slate-400'
+        }`}>
+          <div className={`w-1.5 h-1.5 rounded-full ${activeAgents > 0 ? 'bg-indigo-400 animate-pulse' : 'bg-slate-500'}`} />
+          {activeAgents > 0 ? `${activeAgents} Agent${activeAgents > 1 ? 's' : ''} Active` : '10 Agents Ready'}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {(['chat','coding','debug','workflow','sandbox'] as const).map(name => {
+            const a = agents[name]
+            const colors: Record<string, string> = {
+              chat: '#22d3ee', coding: '#34d399', debug: '#f87171',
+              workflow: '#fb923c', sandbox: '#4ade80',
+            }
+            const isActive = a.status === 'executing' || a.status === 'thinking'
+            return (
+              <div key={name} title={`${name}: ${a.status}`}
+                className="w-1.5 h-1.5 rounded-full transition-all duration-300"
+                style={{
+                  background: isActive ? colors[name] : 'var(--border)',
+                  boxShadow: isActive ? `0 0 6px ${colors[name]}` : 'none',
+                }}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Right */}
+      <div className="flex items-center gap-1">
+        {/* Theme Picker */}
+        <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
+          {THEMES.map(th => (
+            <button key={th.id} onClick={() => setTheme(th.id)} title={th.label}
+              className={`px-1.5 py-0.5 rounded-md text-[10px] transition-all ${
+                theme === th.id ? 'text-white shadow' : 'text-slate-500 hover:text-slate-300'
+              }`}
+              style={{ background: theme === th.id ? 'var(--brand)' : 'transparent' }}>
+              {th.icon}
+            </button>
+          ))}
+        </div>
+
+        {/* Locale */}
+        <button onClick={() => setLocale(locale === 'en' ? 'my' : 'en')}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all hover:bg-white/5"
+          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+          title="Toggle Language / ဘာသာစကားပြောင်း">
+          <Globe size={12} />
+          <span>{locale === 'en' ? 'EN' : 'မြ'}</span>
+        </button>
+
+        {/* God Mode badge */}
+        <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-purple-300"
+          style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)' }}>
+          <Sparkles size={10} />
+          GOD
+        </div>
+      </div>
     </header>
   )
 }

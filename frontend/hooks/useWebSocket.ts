@@ -1,269 +1,250 @@
-// ─── WebSocket Hook — handles agent events, updates store ─────────────────────
+/**
+ * God Mode+ WebSocket Hook
+ * Real-time event streaming from all agents
+ */
 
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
-import { AgentWebSocket } from '@/lib/websocket'
 import { useAgentStore } from './useAgentStore'
-import { StreamEvent } from '@/types'
+import type { AgentName } from './useAgentStore'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const WS_URL = API_URL.replace(/^http/, 'ws')
+
+const AGENT_EVENT_MAP: Record<string, AgentName> = {
+  agent_chat: 'chat', agent_planner: 'planner', agent_coding: 'coding',
+  agent_debug: 'debug', agent_memory: 'memory', agent_connector: 'connector',
+  agent_deploy: 'deploy', agent_workflow: 'workflow', agent_sandbox: 'sandbox',
+  agent_ui: 'ui',
+}
 
 export function useAgentWebSocket(taskId?: string) {
-  const wsRef = useRef<AgentWebSocket | null>(null)
-  const store = useAgentStore()
+  const socketRef = useRef<WebSocket | null>(null)
+  const reconnectRef = useRef<NodeJS.Timeout>()
+  const { addEvent, updateAgentStatus, updateMessage, setStreaming, streamingMessageId } = useAgentStore()
 
-  const handleEvent = useCallback((event: StreamEvent) => {
-    const { type, data, task_id } = event
+  const connect = useCallback(() => {
+    const url = taskId
+      ? `${WS_URL}/ws/tasks/${taskId}`
+      : `${WS_URL}/ws/logs`
 
-    switch (type) {
-      case 'connected':
-        break
+    try {
+      const ws = new WebSocket(url)
+      socketRef.current = ws
 
-      case 'heartbeat':
-        break
-
-      case 'task_created':
-      case 'task_queued':
-        if (task_id) {
-          store.addTask({
-            id: task_id,
-            goal: data.goal || '',
-            status: type === 'task_created' ? 'queued' : 'queued',
-            session_id: event.session_id || store.sessionId,
-            project_id: store.projectId,
-            created_at: event.timestamp,
-            retry_count: 0,
-            ws_url: data.ws_url,
-            stream_url: data.stream_url,
-          })
-          store.setActiveTask(task_id)
-          store.addTimelineEvent({
-            type,
-            label: type === 'task_created' ? '📋 Task Created' : '🔄 Task Queued',
-            description: data.goal ? `Goal: ${data.goal.slice(0, 80)}` : undefined,
-            timestamp: event.timestamp,
-            status: 'completed',
-            data,
-          })
-        }
-        break
-
-      case 'task_started':
-        if (task_id) {
-          store.updateTask(task_id, { status: 'initializing', started_at: event.timestamp })
-          store.addTimelineEvent({
-            type,
-            label: '🚀 Task Started',
-            description: 'Initializing agent...',
-            timestamp: event.timestamp,
-            status: 'running',
-            data,
-          })
-        }
-        break
-
-      case 'plan_generated':
-        if (task_id) {
-          store.updateTask(task_id, { status: 'executing', plan: data as any })
-          if (data.steps) {
-            store.setActiveSteps(data.steps.map((s: any) => ({
-              id: s.id || Math.random().toString(36).slice(2),
-              name: s.name,
-              description: s.description || '',
-              tool: s.tool,
-              status: 'pending' as const,
-            })))
+      ws.onopen = () => {
+        // Start heartbeat
+        const hb = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }))
+          } else {
+            clearInterval(hb)
           }
-          store.addTimelineEvent({
-            type,
-            label: '🗺️ Plan Generated',
-            description: `${data.steps?.length || 0} steps planned`,
-            timestamp: event.timestamp,
-            status: 'completed',
-            data,
-          })
-        }
-        break
+        }, 25000)
+      }
 
-      case 'step_started': {
-        if (task_id) {
-          store.updateTask(task_id, { status: data.status === 'planning' ? 'planning' : 'executing' })
-          store.updateActiveStep(data.step, { status: 'running', started_at: event.timestamp })
-          store.addTimelineEvent({
-            type,
-            label: `▶ ${data.step || 'Step'}`,
-            description: data.description || data.tool ? `Tool: ${data.tool}` : undefined,
-            timestamp: event.timestamp,
-            status: 'running',
-            tool: data.tool,
-            data,
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data)
+          handleEvent(msg)
+        } catch {}
+      }
+
+      ws.onclose = () => {
+        reconnectRef.current = setTimeout(connect, 3000)
+      }
+
+      ws.onerror = () => {
+        ws.close()
+      }
+    } catch {}
+  }, [taskId])
+
+  const handleEvent = useCallback((msg: any) => {
+    const { type, data = {}, event } = msg
+    const eventType = type || event
+
+    // Add to timeline
+    addEvent({ type: eventType, data: data || msg, agent: detectAgent(eventType, data) })
+
+    // Handle streaming chunks
+    if (eventType === 'llm_chunk') {
+      const chunk = data.chunk || ''
+      if (streamingMessageId) {
+        useAgentStore.getState().appendChunk(streamingMessageId, chunk)
+      }
+      return
+    }
+
+    // Update agent statuses
+    switch (eventType) {
+      case 'agent_start':
+      case 'agent_called': {
+        const agentName = (data.agent || '').toLowerCase().replace('agent', '') as AgentName
+        if (agentName) {
+          updateAgentStatus(agentName, {
+            status: 'executing',
+            currentTask: data.task || data.intent || data.goal || '',
+            lastActive: Date.now(),
           })
         }
         break
       }
-
-      case 'step_progress':
-        store.addTimelineEvent({
-          type,
-          label: `⚡ ${data.action || 'Progress'}`,
-          description: data.command?.slice(0, 100) || data.description || '',
-          timestamp: event.timestamp,
-          status: 'running',
-          data,
-        })
+      case 'task_completed':
+      case 'orchestrator_complete':
+      case 'stream_end':
+        setStreaming(false, null)
         break
 
-      case 'tool_called':
-        store.addTimelineEvent({
-          type,
-          label: `🔧 Tool: ${data.tool || 'unknown'}`,
-          description: data.description?.slice(0, 120) || data.step || '',
-          timestamp: event.timestamp,
-          status: 'running',
-          tool: data.tool,
-          data,
-        })
+      case 'task_failed':
+        setStreaming(false, null)
         break
 
-      case 'tool_result':
-        store.addTimelineEvent({
-          type,
-          label: `✅ Tool Result: ${data.tool || 'unknown'}`,
-          description: data.success === false
-            ? `Error: ${data.error?.slice(0, 100)}`
-            : data.result?.slice(0, 120) || 'Success',
-          timestamp: event.timestamp,
-          status: data.success === false ? 'failed' : 'completed',
-          tool: data.tool,
-          data,
-        })
+      case 'self_heal_attempt':
+        updateAgentStatus('debug', { status: 'executing', currentTask: `Self-healing attempt ${data.attempt}/${data.max}` })
         break
 
+      case 'self_heal_success':
+        updateAgentStatus('debug', { status: 'complete', lastActive: Date.now() })
+        break
+
+      case 'workflow_generated':
+        updateAgentStatus('workflow', { status: 'complete', lastActive: Date.now() })
+        break
+
+      case 'plan_ready':
+        updateAgentStatus('planner', { status: 'complete', lastActive: Date.now() })
+        break
+
+      case 'code_generated':
+        updateAgentStatus('coding', { status: 'complete', lastActive: Date.now() })
+        break
+    }
+  }, [addEvent, updateAgentStatus, setStreaming, streamingMessageId])
+
+  useEffect(() => {
+    connect()
+    return () => {
+      clearTimeout(reconnectRef.current)
+      socketRef.current?.close()
+    }
+  }, [connect])
+
+  return socketRef
+}
+
+export function useChatWebSocket(sessionId: string) {
+  const socketRef = useRef<WebSocket | null>(null)
+  const reconnectRef = useRef<NodeJS.Timeout>()
+  const store = useAgentStore()
+
+  const connect = useCallback(() => {
+    const url = `${WS_URL}/ws/chat/${sessionId}`
+    try {
+      const ws = new WebSocket(url)
+      socketRef.current = ws
+
+      ws.onopen = () => {
+        const hb = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
+          else clearInterval(hb)
+        }, 25000)
+      }
+
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data)
+          handleChatEvent(msg)
+        } catch {}
+      }
+
+      ws.onclose = () => {
+        reconnectRef.current = setTimeout(connect, 3000)
+      }
+
+      ws.onerror = () => ws.close()
+    } catch {}
+  }, [sessionId])
+
+  const handleChatEvent = useCallback((msg: any) => {
+    const { type, data = {} } = msg
+
+    store.addEvent({ type, data, agent: detectAgent(type, data) })
+
+    switch (type) {
+      case 'stream_start':
+        break
       case 'llm_chunk':
-        // Handled directly by chat panel streaming message
         if (store.streamingMessageId) {
           store.appendChunk(store.streamingMessageId, data.chunk || '')
         }
         break
-
-      case 'memory_updated':
-        store.addTimelineEvent({
-          type,
-          label: `🧠 Memory Updated`,
-          description: `Type: ${data.type || 'unknown'}`,
-          timestamp: event.timestamp,
-          status: 'completed',
-          data,
-        })
-        break
-
-      case 'retry_attempt':
-        if (task_id) {
-          store.updateTask(task_id, { status: 'retrying', retry_count: data.count || 1 })
-          store.addTimelineEvent({
-            type,
-            label: `🔁 Retry #${data.count || 1}`,
-            timestamp: event.timestamp,
-            status: 'warning',
-            data,
+      case 'stream_end':
+        if (store.streamingMessageId) {
+          store.updateMessage(store.streamingMessageId, {
+            content: data.full_response || store.messages.find(m => m.id === store.streamingMessageId)?.content || '',
+            streaming: false,
           })
         }
+        store.setStreaming(false, null)
         break
-
-      case 'step_completed':
-        if (task_id) {
-          store.updateActiveStep(data.step, { status: 'completed', completed_at: event.timestamp })
-          store.addTimelineEvent({
-            type,
-            label: `✓ ${data.step || 'Step'} Done`,
-            description: data.output?.slice(0, 100),
-            timestamp: event.timestamp,
-            status: 'completed',
-            data,
-          })
-        }
-        break
-
-      case 'warning':
-        store.addTimelineEvent({
-          type,
-          label: `⚠️ Warning`,
-          description: data.message || data.warning || '',
-          timestamp: event.timestamp,
-          status: 'warning',
-          data,
-        })
-        break
-
-      case 'error':
-        store.addTimelineEvent({
-          type,
-          label: `❌ Error`,
-          description: data.error?.slice(0, 120) || 'Unknown error',
-          timestamp: event.timestamp,
-          status: 'failed',
-          data,
-        })
-        break
-
-      case 'task_completed':
-        if (task_id) {
-          store.updateTask(task_id, { status: 'completed', result: data.result, completed_at: event.timestamp })
-          store.addTimelineEvent({
-            type,
-            label: '🎉 Task Completed',
-            description: `${data.steps_completed || 0} steps finished`,
-            timestamp: event.timestamp,
-            status: 'completed',
-            data,
-          })
-          store.setStreaming(false, null)
-          // Add result to chat
-          if (data.result) {
-            store.updateMessage(store.streamingMessageId || '', {
-              content: data.result,
-              streaming: false,
-              metadata: { task_id, completed: true },
-            })
-          }
-        }
-        break
-
-      case 'task_failed':
-        if (task_id) {
-          store.updateTask(task_id, { status: 'failed', error: data.error, completed_at: event.timestamp })
-          store.addTimelineEvent({
-            type,
-            label: '❌ Task Failed',
-            description: data.error?.slice(0, 100) || data.reason || 'Failed',
-            timestamp: event.timestamp,
-            status: 'failed',
-            data,
-          })
-          store.setStreaming(false, null)
-        }
+      case 'orchestrator_complete':
+        store.setStreaming(false, null)
         break
     }
   }, [store])
 
-  useEffect(() => {
-    const path = taskId ? `/ws/tasks/${taskId}` : `/ws/logs`
-
-    wsRef.current = new AgentWebSocket(path, {
-      onEvent: handleEvent,
-      onConnect: () => store.setWsConnected(true, 0),
-      onDisconnect: () => store.setWsConnected(false),
-      onError: () => store.setWsConnected(false, wsRef.current?.getRetryCount() || 0),
-    })
-    wsRef.current.connect()
-
-    return () => {
-      wsRef.current?.disconnect()
+  const sendMessage = useCallback((content: string, context?: Record<string, any>) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'chat_message',
+        content,
+        context: context || {},
+        timestamp: Date.now(),
+      }))
     }
-  }, [taskId])
+  }, [])
 
-  return {
-    send: (data: object) => wsRef.current?.send(data),
-    isConnected: store.wsConnected,
-    retries: store.wsRetries,
-  }
+  const sendTask = useCallback((content: string) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'task_message',
+        content,
+        timestamp: Date.now(),
+      }))
+    }
+  }, [])
+
+  useEffect(() => {
+    connect()
+    return () => {
+      clearTimeout(reconnectRef.current)
+      socketRef.current?.close()
+    }
+  }, [connect])
+
+  return { socketRef, sendMessage, sendTask }
+}
+
+function detectAgent(eventType: string, data: any): AgentName | undefined {
+  const agentStr = (data?.agent || '').toLowerCase()
+  if (agentStr.includes('chat')) return 'chat'
+  if (agentStr.includes('planner') || agentStr.includes('plan')) return 'planner'
+  if (agentStr.includes('coding') || agentStr.includes('code')) return 'coding'
+  if (agentStr.includes('debug')) return 'debug'
+  if (agentStr.includes('memory')) return 'memory'
+  if (agentStr.includes('connector')) return 'connector'
+  if (agentStr.includes('deploy')) return 'deploy'
+  if (agentStr.includes('workflow')) return 'workflow'
+  if (agentStr.includes('sandbox')) return 'sandbox'
+  if (agentStr.includes('ui')) return 'ui'
+  if (eventType.includes('code')) return 'coding'
+  if (eventType.includes('plan')) return 'planner'
+  if (eventType.includes('debug') || eventType.includes('heal')) return 'debug'
+  if (eventType.includes('workflow')) return 'workflow'
+  if (eventType.includes('sandbox') || eventType.includes('exec')) return 'sandbox'
+  if (eventType.includes('connector')) return 'connector'
+  if (eventType.includes('deploy')) return 'deploy'
+  return undefined
 }

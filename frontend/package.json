@@ -1,6 +1,6 @@
 {
-  "name": "devin-agent-ui",
-  "version": "2.0.0",
+  "name": "god-mode-plus-ui",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
@@ -21,7 +21,9 @@
     "tailwind-merge": "^2.3.0",
     "date-fns": "^3.6.0",
     "zustand": "^4.5.2",
-    "framer-motion": "^11.1.9"
+    "framer-motion": "^11.1.9",
+    "i18next": "^23.11.5",
+    "react-i18next": "^14.1.2"
   },
   "devDependencies": {
     "@types/node": "^20",
