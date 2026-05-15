@@ -9,21 +9,22 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.1.9",
+    "i18next": "^23.11.5",
+    "lucide-react": "^0.378.0",
     "next": "14.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^14.1.2",
     "react-markdown": "^9.0.1",
     "react-syntax-highlighter": "^15.5.0",
-    "remark-gfm": "^4.0.0",
+    "recharts": "^3.8.1",
     "rehype-highlight": "^7.0.0",
-    "lucide-react": "^0.378.0",
-    "clsx": "^2.1.1",
+    "remark-gfm": "^4.0.0",
     "tailwind-merge": "^2.3.0",
-    "date-fns": "^3.6.0",
-    "zustand": "^4.5.2",
-    "framer-motion": "^11.1.9",
-    "i18next": "^23.11.5",
-    "react-i18next": "^14.1.2"
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@types/node": "^20",
