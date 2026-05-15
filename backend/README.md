@@ -1,58 +1,52 @@
----
-title: Devin Agent Platform
-emoji: 🤖
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: true
-license: mit
-short_description: Production-grade autonomous AI engineering platform
----
+# 🤖 GOD AGENT OS v7 — Autonomous Engineering Platform
+> **Manus + Genspark + Devin (OneHand)** Combined
 
-# 🤖 Devin Agent Platform v2.0
+## Overview
+GOD AGENT OS v7 is a production-grade autonomous AI engineering operating system with 16 specialized agents working in parallel.
 
-> **Manus/Devin-style Autonomous AI Engineering Platform**
-> Real-time WebSocket streaming · Autonomous GitHub operations · Persistent memory
-
-## ✨ Features
-
-- ⚡ **Real-time WebSocket streaming** — live token-by-token LLM output
-- 🗺️ **Autonomous task planning** — goal → plan → execute automatically  
-- 🧠 **Persistent memory** — SQLite-backed conversation + project memory
-- 🐙 **GitHub automation** — clone, commit, push, PR, issues autonomously
-- 🔁 **Self-healing** — auto-retry with exponential backoff
-- 📡 **SSE fallback** — Server-Sent Events for streaming compatibility
-- 🌐 **REST + WebSocket API** — full-featured backend
-
-## 🔌 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/tasks/create` | Create autonomous task |
-| GET | `/api/v1/tasks/{id}` | Get task details |
-| POST | `/api/v1/tasks/{id}/cancel` | Cancel task |
-| POST | `/api/v1/tasks/{id}/retry` | Retry failed task |
-| GET | `/api/v1/tasks/{id}/stream` | SSE task stream |
-| POST | `/api/v1/chat` | Chat with agent |
-| POST | `/api/v1/goal` | Submit high-level goal |
-| POST | `/api/v1/plan` | Generate execution plan |
-| WS | `/ws/tasks/{task_id}` | Live task WebSocket |
-| WS | `/ws/logs` | Global log stream |
-| WS | `/ws/chat/{session_id}` | Chat WebSocket |
-| WS | `/ws/agent/status` | Agent status stream |
-
-## 🔑 Environment Variables (HF Secrets)
-
+## 🚀 Quick Start (HuggingFace Space)
+Set environment variables in HF Space secrets:
 ```
-OPENAI_API_KEY     = sk-...          (for real AI)
-ANTHROPIC_API_KEY  = sk-ant-...      (alternative)
-GITHUB_TOKEN       = ghp_...         (GitHub ops)
-GITHUB_OWNER       = your-username   (GitHub ops)
+OPENAI_API_KEY=sk-...        # or any below
+GROQ_API_KEY=gsk_...         # Free Llama 3.3 70B
+OPENROUTER_API_KEY=sk-or-... # Multi-model
+ANTHROPIC_API_KEY=sk-ant-... # Claude 3.5
+GITHUB_TOKEN=ghp_...         # Git operations
+WORKSPACE_DIR=/tmp/god_workspace
 ```
 
-## 🚀 Quick Start
+## 🤖 16-Agent Fleet
+| Agent | Role |
+|-------|------|
+| OrchestratorV7 | Central brain, routes & coordinates |
+| PlannerAgent | Task graph decomposition |
+| CodingAgent | Production code generation |
+| DebugAgent | Self-healing error resolution |
+| **BrowserAgent** ⭐ | Web research & scraping |
+| **FileAgent** ⭐ | File system & project scaffolding |
+| **GitAgent** ⭐ | Git operations & PR creation |
+| **TestAgent** ⭐ | Test generation & execution |
+| **VisionAgent** ⭐ | Design-to-code UI generation |
+| SandboxAgent | Isolated code execution |
+| DeployAgent | Auto-deploy to cloud platforms |
+| ConnectorAgent | External integrations |
+| MemoryAgent | Long-term context |
+| WorkflowAgent | n8n automation |
+| UIAgent | Real-time UI state |
+| ReasoningAgent | Deep reasoning chains |
 
-Visit `/api/docs` for interactive Swagger UI.
+## API Endpoints
+- `GET /` — System status
+- `GET /api/docs` — Interactive API docs
+- `POST /api/v1/chat/stream` — Chat with God Agent
+- `POST /api/v1/tasks` — Create autonomous task
+- `POST /api/v1/browser/research` — Web research
+- `GET /api/v1/files/workspace` — List workspace
+- `POST /api/v1/git/pr` — Create GitHub PR
+- `POST /api/v1/vision/generate` — Generate UI
 
-**Demo mode** works without any API keys — set `OPENAI_API_KEY` for real AI.
+## WebSocket Endpoints
+- `WS /ws/chat/{session_id}` — Real-time chat
+- `WS /ws/tasks/{task_id}` — Task execution stream
+- `WS /ws/sandbox/{session_id}` — Terminal stream
+- `WS /ws/agent/status` — Agent status updates

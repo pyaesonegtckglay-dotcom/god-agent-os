@@ -1,6 +1,6 @@
 /**
- * God Mode+ Global State — Zustand Store
- * Manages: messages, agents, tasks, themes, locale, connectors
+ * God Agent OS v7 — Global State Store
+ * Manus + Genspark + Devin (OneHand)
  */
 
 import { create } from 'zustand'
@@ -8,8 +8,8 @@ import { nanoid } from './nanoid'
 
 export type Theme = 'dark' | 'light' | 'amoled' | 'neon' | 'glass'
 export type Locale = 'en' | 'my'
-export type AgentName = 'chat' | 'planner' | 'coding' | 'debug' | 'memory' | 'connector' | 'deploy' | 'workflow' | 'sandbox' | 'ui'
-export type ActivePanel = 'timeline' | 'tasks' | 'memory' | 'connectors' | 'sandbox'
+export type AgentName = 'chat' | 'planner' | 'coding' | 'debug' | 'memory' | 'connector' | 'deploy' | 'workflow' | 'sandbox' | 'ui' | 'browser' | 'file' | 'git' | 'test' | 'vision' | 'reasoning'
+export type ActivePanel = 'timeline' | 'tasks' | 'memory' | 'connectors' | 'sandbox' | 'files' | 'browser'
 
 export interface Message {
   id: string
@@ -47,48 +47,29 @@ export interface ConnectorInfo {
 }
 
 interface GodStore {
-  // Session
   sessionId: string
-  
-  // Messages
   messages: Message[]
   isStreaming: boolean
   streamingMessageId: string | null
-  
-  // Mode
   mode: 'agent' | 'chat'
   setMode: (m: 'agent' | 'chat') => void
-  
-  // Theme & Locale
   theme: Theme
   locale: Locale
   setTheme: (t: Theme) => void
   setLocale: (l: Locale) => void
-  
-  // Panels
   activePanel: ActivePanel
   setActivePanel: (p: ActivePanel) => void
   sidebarOpen: boolean
   setSidebarOpen: (v: boolean) => void
-  
-  // Active task
   activeTaskId: string | null
   setActiveTaskId: (id: string | null) => void
-  
-  // Task events (execution timeline)
   events: TaskEvent[]
   addEvent: (e: Omit<TaskEvent, 'id' | 'timestamp'>) => void
   clearEvents: () => void
-  
-  // Agent statuses
   agents: Record<AgentName, AgentStatus>
   updateAgentStatus: (name: AgentName, s: Partial<AgentStatus>) => void
-  
-  // Connectors
   connectors: ConnectorInfo[]
   setConnectors: (c: ConnectorInfo[]) => void
-  
-  // Message actions
   addMessage: (m: Omit<Message, 'id' | 'timestamp'>) => string
   appendChunk: (id: string, chunk: string) => void
   updateMessage: (id: string, updates: Partial<Message>) => void
@@ -96,22 +77,23 @@ interface GodStore {
   clearMessages: () => void
 }
 
-const AGENT_NAMES: AgentName[] = ['chat','planner','coding','debug','memory','connector','deploy','workflow','sandbox','ui']
+const ALL_AGENTS: AgentName[] = [
+  'chat','planner','coding','debug','memory','connector',
+  'deploy','workflow','sandbox','ui','browser','file',
+  'git','test','vision','reasoning'
+]
 
-const defaultAgents: Record<AgentName, AgentStatus> = Object.fromEntries(
-  AGENT_NAMES.map(n => [n, { name: n, status: 'idle' }])
+const defaultAgents = Object.fromEntries(
+  ALL_AGENTS.map(n => [n, { name: n, status: 'idle' as const }])
 ) as Record<AgentName, AgentStatus>
 
 export const useAgentStore = create<GodStore>((set, get) => ({
   sessionId: `sess_${nanoid(16)}`,
-  
   messages: [],
   isStreaming: false,
   streamingMessageId: null,
-  
   mode: 'agent',
   setMode: (mode) => set({ mode }),
-  
   theme: 'dark',
   locale: 'en',
   setTheme: (theme) => {
@@ -121,48 +103,34 @@ export const useAgentStore = create<GodStore>((set, get) => ({
     }
   },
   setLocale: (locale) => set({ locale }),
-  
   activePanel: 'timeline',
   setActivePanel: (activePanel) => set({ activePanel }),
   sidebarOpen: true,
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
-  
   activeTaskId: null,
   setActiveTaskId: (id) => set({ activeTaskId: id }),
-  
   events: [],
   addEvent: (e) => set(s => ({
     events: [...s.events.slice(-200), { ...e, id: nanoid(8), timestamp: Date.now() }]
   })),
   clearEvents: () => set({ events: [] }),
-  
   agents: defaultAgents,
   updateAgentStatus: (name, updates) => set(s => ({
-    agents: { ...s.agents, [name]: { ...s.agents[name], ...updates } }
+    agents: { ...s.agents, [name]: { ...(s.agents[name] || { name, status: 'idle' }), ...updates } }
   })),
-  
   connectors: [],
   setConnectors: (connectors) => set({ connectors }),
-  
   addMessage: (m) => {
     const id = nanoid(12)
-    set(s => ({
-      messages: [...s.messages, { ...m, id, timestamp: Date.now() }]
-    }))
+    set(s => ({ messages: [...s.messages, { ...m, id, timestamp: Date.now() }] }))
     return id
   },
-  
   appendChunk: (id, chunk) => set(s => ({
-    messages: s.messages.map(m =>
-      m.id === id ? { ...m, content: m.content + chunk } : m
-    )
+    messages: s.messages.map(m => m.id === id ? { ...m, content: m.content + chunk } : m)
   })),
-  
   updateMessage: (id, updates) => set(s => ({
     messages: s.messages.map(m => m.id === id ? { ...m, ...updates } : m)
   })),
-  
   setStreaming: (isStreaming, streamingMessageId) => set({ isStreaming, streamingMessageId }),
-  
   clearMessages: () => set({ messages: [], events: [] }),
 }))

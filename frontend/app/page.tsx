@@ -11,6 +11,8 @@ import TasksPanel from '@/components/layout/TasksPanel'
 import MemoryPanel from '@/components/layout/MemoryPanel'
 import ConnectorsPanel from '@/components/layout/ConnectorsPanel'
 import SandboxPanel from '@/components/layout/SandboxPanel'
+import FileExplorer from '@/components/layout/FileExplorer'
+import BrowserPanel from '@/components/layout/BrowserPanel'
 import { Zap } from 'lucide-react'
 
 export default function HomePage() {
@@ -19,18 +21,13 @@ export default function HomePage() {
 
   useEffect(() => {
     setMounted(true)
-    // Apply theme on mount
     document.documentElement.setAttribute('data-theme', theme)
   }, [])
 
-  // Apply theme changes
   useEffect(() => {
-    if (mounted) {
-      document.documentElement.setAttribute('data-theme', theme)
-    }
+    if (mounted) document.documentElement.setAttribute('data-theme', theme)
   }, [theme, mounted])
 
-  // Connect WebSocket streams
   useAgentWebSocket(undefined)
   useAgentWebSocket(activeTaskId || undefined)
 
@@ -41,8 +38,9 @@ export default function HomePage() {
           style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>
           <Zap size={28} className="text-indigo-400" />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>God Mode+</h2>
-        <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>AI Operating System v3.0</p>
+        <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>GOD AGENT OS</h2>
+        <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>Autonomous Engineering Platform v7.0</p>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Manus + Genspark + Devin</p>
         <div className="flex gap-1.5 justify-center">
           {[0, 1, 2].map(i => (
             <div key={i} className="typing-dot" style={{ animationDelay: `${i * 0.16}s` }} />
@@ -59,26 +57,20 @@ export default function HomePage() {
       case 'memory':     return <MemoryPanel />
       case 'connectors': return <ConnectorsPanel />
       case 'sandbox':    return <SandboxPanel />
+      case 'files':      return <FileExplorer />
+      case 'browser':    return <BrowserPanel />
       default:           return <ExecutionTimeline />
     }
   }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--bg-0)' }}>
-      {/* Top Bar */}
       <TopBar />
-
-      {/* Main 3-column layout (Manus-style) */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Sidebar (chats, agents, panels) */}
         <Sidebar />
-
-        {/* Center: Chat */}
         <div className="flex-1 min-w-0 border-r" style={{ borderColor: 'var(--border)' }}>
           <ChatPanel />
         </div>
-
-        {/* Right: Timeline / Tasks / Memory / Connectors / Sandbox */}
         <div className="w-[400px] flex-shrink-0 hidden lg:block">
           <RightPanel />
         </div>
