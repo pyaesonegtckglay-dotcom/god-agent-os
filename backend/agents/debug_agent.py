@@ -44,12 +44,12 @@ class DebugAgent(BaseAgent):
         messages = [
             {"role": "system", "content": DEBUG_SYSTEM},
             {"role": "user", "content": (
-                f"Debug and fix this issue (attempt {attempt}):\n\n"
-                f"{task}\n\n"
-                f"Provide:\n"
-                f"1. Root cause analysis\n"
-                f"2. Exact fix (code/config)\n"
-                f"3. Prevention strategy"
+                "Debug and fix this issue (attempt " + str(attempt) + "):\n\n"
+                + task + "\n\n"
+                "Provide:\n"
+                "1. Root cause analysis\n"
+                "2. Exact fix (code/config)\n"
+                "3. Prevention strategy"
             )},
         ]
 
@@ -71,14 +71,19 @@ class DebugAgent(BaseAgent):
 
     async def analyze_error(self, error_output: str, source_code: str = "", task_id: str = "", session_id: str = "") -> Dict:
         """Deep error analysis with structured output."""
+        if source_code:
+            source_section = "Source Code:\n```\n" + source_code[:1000] + "\n```"
+        else:
+            source_section = ""
+
         messages = [
             {"role": "system", "content": DEBUG_SYSTEM},
             {"role": "user", "content": (
-                f"Analyze this error and provide structured diagnosis:\n\n"
-                f"Error:\n{error_output[:2000]}\n\n"
-                f"{'Source Code:\\n```\\n' + source_code[:1000] + '\\n```' if source_code else ''}\n\n"
-                f"Respond with JSON:\n"
-                f'{{"error_type": "...", "root_cause": "...", "fix": "...", "prevention": "...", "severity": "low|medium|high|critical"}}'
+                "Analyze this error and provide structured diagnosis:\n\n"
+                "Error:\n" + error_output[:2000] + "\n\n"
+                + source_section + "\n\n"
+                "Respond with JSON:\n"
+                '{"error_type": "...", "root_cause": "...", "fix": "...", "prevention": "...", "severity": "low|medium|high|critical"}'
             )},
         ]
         raw = await self.llm(messages, task_id=task_id, session_id=session_id, temperature=0.1, max_tokens=1000)
@@ -111,10 +116,10 @@ class DebugAgent(BaseAgent):
             messages = [
                 {"role": "system", "content": DEBUG_SYSTEM},
                 {"role": "user", "content": (
-                    f"Fix attempt {attempt}/{max_retries}:\n\n"
-                    f"Error: {current_error}\n\n"
-                    f"Code:\n```\n{current_code[:3000]}\n```\n\n"
-                    f"Return ONLY the fixed code."
+                    "Fix attempt " + str(attempt) + "/" + str(max_retries) + ":\n\n"
+                    "Error: " + current_error + "\n\n"
+                    "Code:\n```\n" + current_code[:3000] + "\n```\n\n"
+                    "Return ONLY the fixed code."
                 )},
             ]
 
@@ -143,7 +148,7 @@ class DebugAgent(BaseAgent):
             compile(code, "<string>", "exec")
             return {"valid": True, "error": ""}
         except SyntaxError as e:
-            return {"valid": False, "error": f"SyntaxError: {e}"}
+            return {"valid": False, "error": "SyntaxError: " + str(e)}
         except Exception as e:
             return {"valid": False, "error": str(e)}
 

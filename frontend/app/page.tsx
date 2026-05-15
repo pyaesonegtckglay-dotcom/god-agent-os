@@ -13,6 +13,7 @@ import ConnectorsPanel from '@/components/layout/ConnectorsPanel'
 import SandboxPanel from '@/components/layout/SandboxPanel'
 import FileExplorer from '@/components/layout/FileExplorer'
 import BrowserPanel from '@/components/layout/BrowserPanel'
+import AIRouterPanel from '@/components/layout/AIRouterPanel'
 import { Zap } from 'lucide-react'
 
 export default function HomePage() {
@@ -39,8 +40,9 @@ export default function HomePage() {
           <Zap size={28} className="text-indigo-400" />
         </div>
         <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>GOD AGENT OS</h2>
-        <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>Autonomous Engineering Platform v7.0</p>
-        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Manus + Genspark + Devin</p>
+        <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>Autonomous Engineering Platform v8.0</p>
+        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Manus + Genspark + Devin</p>
+        <p className="text-xs mb-4" style={{ color: '#6366f1' }}>KeyPool: Gemini × 6 + SambaNova × 9</p>
         <div className="flex gap-1.5 justify-center">
           {[0, 1, 2].map(i => (
             <div key={i} className="typing-dot" style={{ animationDelay: `${i * 0.16}s` }} />
@@ -59,6 +61,7 @@ export default function HomePage() {
       case 'sandbox':    return <SandboxPanel />
       case 'files':      return <FileExplorer />
       case 'browser':    return <BrowserPanel />
+      case 'ai_router':  return <AIRouterPanel />
       default:           return <ExecutionTimeline />
     }
   }

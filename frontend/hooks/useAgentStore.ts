@@ -9,7 +9,7 @@ import { nanoid } from './nanoid'
 export type Theme = 'dark' | 'light' | 'amoled' | 'neon' | 'glass'
 export type Locale = 'en' | 'my'
 export type AgentName = 'chat' | 'planner' | 'coding' | 'debug' | 'memory' | 'connector' | 'deploy' | 'workflow' | 'sandbox' | 'ui' | 'browser' | 'file' | 'git' | 'test' | 'vision' | 'reasoning'
-export type ActivePanel = 'timeline' | 'tasks' | 'memory' | 'connectors' | 'sandbox' | 'files' | 'browser'
+export type ActivePanel = 'timeline' | 'tasks' | 'memory' | 'connectors' | 'sandbox' | 'files' | 'browser' | 'ai_router'
 
 export interface Message {
   id: string

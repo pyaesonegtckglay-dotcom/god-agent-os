@@ -22,6 +22,16 @@ ENV PORT=7860
 ENV WORKSPACE_DIR=/tmp/god_workspace
 ENV PYTHONPATH=/app
 
+# API Keys are configured via HF Space Secrets (Settings → Variables and Secrets)
+# Set these in your HF Space:
+#   GEMINI_API_KEYS      — comma-separated Gemini API keys
+#   SAMBANOVA_API_KEYS   — comma-separated SambaNova API keys
+#   GITHUB_API_KEYS      — comma-separated GitHub tokens
+#   GITHUB_TOKEN         — primary GitHub token
+#   OPENAI_API_KEY       — OpenAI API key (optional)
+#   GROQ_API_KEY         — Groq API key (optional, free)
+#   ANTHROPIC_API_KEY    — Anthropic API key (optional)
+
 EXPOSE 7860
 
-CMD ["uvicorn", "main_v7:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+CMD ["uvicorn", "main_v8:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

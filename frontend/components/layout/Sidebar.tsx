@@ -17,6 +17,7 @@ const PANELS: { id: ActivePanel; icon: React.ElementType; labelEn: string; label
   { id: 'browser',    icon: Globe,          labelEn: 'Browser',     labelMy: 'ဘရောင်ဇာ',  badge: 'v7' },
   { id: 'memory',     icon: Brain,          labelEn: 'Memory',      labelMy: 'မှတ်ဉာဏ်' },
   { id: 'connectors', icon: Plug,           labelEn: 'Connectors',  labelMy: 'ချိတ်ဆက်မှု' },
+  { id: 'ai_router',   icon: Cpu,            labelEn: 'AI Router',   labelMy: 'AI Router',    badge: 'v8' },
 ]
 
 const AGENT_META: Record<string, { icon: React.ElementType; color: string; label: string; isNew?: boolean }> = {
@@ -128,7 +129,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px]"
           style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
           <Bot size={10} className="text-indigo-400" />
-          <span style={{ color: 'var(--text-muted)' }}>God Agent OS v7.0</span>
+          <span style={{ color: 'var(--text-muted)' }}>God Agent OS v8.0</span>
           <div className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
         </div>
       </div>
