@@ -1,82 +1,81 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAgentStore } from '@/hooks/useAgentStore'
-import { useAgentWebSocket } from '@/hooks/useWebSocket'
-import TopBar from '@/components/layout/TopBar'
-import Sidebar from '@/components/layout/Sidebar'
-import ChatPanel from '@/components/chat/ChatPanel'
-import ExecutionTimeline from '@/components/timeline/ExecutionTimeline'
-import TasksPanel from '@/components/layout/TasksPanel'
-import MemoryPanel from '@/components/layout/MemoryPanel'
-import ConnectorsPanel from '@/components/layout/ConnectorsPanel'
-import SandboxPanel from '@/components/layout/SandboxPanel'
-import FileExplorer from '@/components/layout/FileExplorer'
-import BrowserPanel from '@/components/layout/BrowserPanel'
-import AIRouterPanel from '@/components/layout/AIRouterPanel'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Zap } from 'lucide-react'
+import Sidebar from '@/components/shared/Sidebar'
+import TopBar from '@/components/shared/TopBar'
+import DashboardPage from '@/components/pages/DashboardPage'
+import AgentsPage from '@/components/pages/AgentsPage'
+import TasksPage from '@/components/pages/TasksPage'
+import MemoryPage from '@/components/pages/MemoryPage'
+import KnowledgePage from '@/components/pages/KnowledgePage'
+import WorkflowsPage from '@/components/pages/WorkflowsPage'
+import AnalyticsPage from '@/components/pages/AnalyticsPage'
+import SettingsPage from '@/components/pages/SettingsPage'
+import { useAppStore } from '@/store/useAppStore'
 
-export default function HomePage() {
-  const { activePanel, activeTaskId, theme } = useAgentStore()
+const PAGE_MAP = {
+  dashboard:  DashboardPage,
+  agents:     AgentsPage,
+  tasks:      TasksPage,
+  memory:     MemoryPage,
+  knowledge:  KnowledgePage,
+  workflows:  WorkflowsPage,
+  analytics:  AnalyticsPage,
+  settings:   SettingsPage,
+}
+
+export default function GodAgentOS() {
+  const { currentPage } = useAppStore()
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-    document.documentElement.setAttribute('data-theme', theme)
-  }, [])
-
-  useEffect(() => {
-    if (mounted) document.documentElement.setAttribute('data-theme', theme)
-  }, [theme, mounted])
-
-  useAgentWebSocket(undefined)
-  useAgentWebSocket(activeTaskId || undefined)
+  useEffect(() => { setMounted(true) }, [])
 
   if (!mounted) return (
-    <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg-0)' }}>
-      <div className="text-center">
-        <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-          style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>
-          <Zap size={28} className="text-indigo-400" />
+    <div className="flex items-center justify-center h-screen" style={{ background: '#05060d' }}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center"
+      >
+        <div className="w-16 h-16 rounded-2xl mx-auto mb-5 flex items-center justify-center glow-purple"
+          style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
+          <Zap size={28} className="text-white" />
         </div>
-        <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--text-primary)' }}>GOD AGENT OS</h2>
-        <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>Autonomous Engineering Platform v8.0</p>
-        <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Manus + Genspark + Devin</p>
-        <p className="text-xs mb-4" style={{ color: '#6366f1' }}>KeyPool: Gemini × 6 + SambaNova × 9</p>
-        <div className="flex gap-1.5 justify-center">
+        <div className="shimmer-text text-xl font-black mb-2">GOD AGENT OS</div>
+        <div className="text-sm text-slate-600 mb-1">Autonomous AI Operating System</div>
+        <div className="text-xs text-slate-700">Gemini · Sambanova · GitHub Models</div>
+        <div className="flex gap-2 justify-center mt-6">
           {[0, 1, 2].map(i => (
-            <div key={i} className="typing-dot" style={{ animationDelay: `${i * 0.16}s` }} />
+            <div key={i} className="typing-dot" style={{ animationDelay: `${i * 0.2}s` }} />
           ))}
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 
-  const RightPanel = () => {
-    switch (activePanel) {
-      case 'timeline':   return <ExecutionTimeline />
-      case 'tasks':      return <TasksPanel />
-      case 'memory':     return <MemoryPanel />
-      case 'connectors': return <ConnectorsPanel />
-      case 'sandbox':    return <SandboxPanel />
-      case 'files':      return <FileExplorer />
-      case 'browser':    return <BrowserPanel />
-      case 'ai_router':  return <AIRouterPanel />
-      default:           return <ExecutionTimeline />
-    }
-  }
+  const PageComponent = PAGE_MAP[currentPage]
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--bg-0)' }}>
-      <TopBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <div className="flex-1 min-w-0 border-r" style={{ borderColor: 'var(--border)' }}>
-          <ChatPanel />
-        </div>
-        <div className="w-[400px] flex-shrink-0 hidden lg:block">
-          <RightPanel />
-        </div>
+    <div className="flex h-screen overflow-hidden" style={{ background: '#05060d' }}>
+      <Sidebar />
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <TopBar />
+        <main className="flex-1 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="h-full"
+            >
+              <PageComponent />
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   )

@@ -1,141 +1,221 @@
 """
-AIRouter v8 — God Agent OS
-Multi-provider AI router with KeyPool failover.
-Supports: Gemini, SambaNova, OpenAI, Groq, Cerebras, OpenRouter, Anthropic
-Primary LLMs: Gemini (6 keys) + SambaNova (9 keys) — fully pooled
+GOD AGENT OS — Multi-Provider AI Router v8
+Primary Providers (in rotation): Gemini -> Sambanova -> GitHub Models
+Task-aware routing with key pool management, failover, and streaming.
 """
 
 import asyncio
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import structlog
-
-from ai_router.key_pool import KeyPoolRegistry
 
 log = structlog.get_logger()
 
 # ─── Provider Definitions ─────────────────────────────────────────────────────
 
-PROVIDER_CONFIG = [
-    # Priority 1 — SambaNova (fast, free tier)
-    {
-        "name": "sambanova",
-        "key_env": "SAMBANOVA_API_KEYS",
-        "base_url": "https://api.sambanova.ai/v1",
-        "default_model": "Meta-Llama-3.3-70B-Instruct",
-        "type": "openai_compat",
-        "max_tokens": 4096,
-        "priority": 1,
-    },
-    # Priority 2 — Gemini (Google AI)
-    {
+PROVIDERS = {
+    "gemini": {
         "name": "gemini",
-        "key_env": "GEMINI_API_KEYS",
-        "base_url": "https://generativelanguage.googleapis.com",
-        "default_model": "gemini-1.5-flash",
         "type": "gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "key_env": "GEMINI_KEY",
+        "default_model": "gemini-2.0-flash",
         "max_tokens": 8192,
-        "priority": 2,
+        "priority_tasks": ["language", "research", "content", "general"],
     },
-    # Priority 3 — OpenAI
-    {
-        "name": "openai",
-        "key_env": "OPENAI_API_KEY",
-        "base_url": os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-        "default_model": os.environ.get("DEFAULT_MODEL", "gpt-4o"),
-        "type": "openai_compat",
+    "sambanova": {
+        "name": "sambanova",
+        "type": "openai",
+        "base_url": "https://api.sambanova.ai/v1",
+        "key_env": "SAMBANOVA_KEY",
+        "default_model": "Meta-Llama-3.3-70B-Instruct",
+        "max_tokens": 8192,
+        "priority_tasks": ["reasoning", "engineering", "planning", "analysis"],
+    },
+    "github": {
+        "name": "github",
+        "type": "openai",
+        "base_url": "https://models.inference.ai.azure.com",
+        "key_env": "GITHUB_KEY",
+        "default_model": "gpt-4o",
         "max_tokens": 4096,
-        "priority": 3,
+        "priority_tasks": ["planning", "engineering", "general"],
     },
-    # Priority 4 — Groq
-    {
+    "groq": {
         "name": "groq",
-        "key_env": "GROQ_API_KEY",
+        "type": "openai",
         "base_url": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
         "default_model": "llama-3.3-70b-versatile",
-        "type": "openai_compat",
-        "max_tokens": 4096,
-        "priority": 4,
+        "max_tokens": 8192,
+        "priority_tasks": ["general"],
     },
-    # Priority 5 — Cerebras
-    {
-        "name": "cerebras",
-        "key_env": "CEREBRAS_API_KEY",
-        "base_url": "https://api.cerebras.ai/v1",
-        "default_model": "llama3.1-70b",
-        "type": "openai_compat",
+    "openai": {
+        "name": "openai",
+        "type": "openai",
+        "base_url": "https://api.openai.com/v1",
+        "key_env": "OPENAI_API_KEY",
+        "default_model": "gpt-4o",
         "max_tokens": 4096,
-        "priority": 5,
+        "priority_tasks": ["general"],
     },
-    # Priority 6 — OpenRouter
-    {
-        "name": "openrouter",
-        "key_env": "OPENROUTER_API_KEY",
-        "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
-        "type": "openai_compat",
-        "max_tokens": 4096,
-        "priority": 6,
-    },
-    # Priority 7 — Anthropic
-    {
-        "name": "anthropic",
-        "key_env": "ANTHROPIC_API_KEY",
-        "base_url": "https://api.anthropic.com/v1",
-        "default_model": "claude-3-5-sonnet-20241022",
-        "type": "anthropic",
-        "max_tokens": 4096,
-        "priority": 7,
-    },
-]
+}
+
+PRIMARY_ORDER = ["gemini", "sambanova", "github"]
+FALLBACK_ORDER = ["groq", "openai"]
+
+MAX_RETRIES_PER_KEY = 2
+KEY_COOLDOWN_SECONDS = 300
+KEY_MAX_FAILS = 3
 
 
-class AIRouterV8:
+class KeyPool:
+    """Manages a pool of API keys with fail tracking and cooldowns."""
+
+    def __init__(self, raw_keys: str):
+        self._keys: List[Dict] = []
+        for k in raw_keys.split(","):
+            k = k.strip()
+            if k:
+                self._keys.append({"key": k, "fails": 0, "cooldown_until": 0.0})
+
+    def pick(self) -> Optional[Dict]:
+        now = time.time()
+        available = [k for k in self._keys if k["cooldown_until"] < now]
+        if not available:
+            return None
+        available.sort(key=lambda x: x["fails"])
+        return available[0]
+
+    def mark_fail(self, key_obj: Dict):
+        key_obj["fails"] += 1
+        if key_obj["fails"] >= KEY_MAX_FAILS:
+            key_obj["cooldown_until"] = time.time() + KEY_COOLDOWN_SECONDS
+            log.warning("Key cooled down", key_prefix=key_obj["key"][:8])
+
+    def mark_success(self, key_obj: Dict):
+        key_obj["fails"] = 0
+        key_obj["cooldown_until"] = 0.0
+
+    def has_keys(self) -> bool:
+        return len(self._keys) > 0
+
+    def count(self) -> int:
+        return len(self._keys)
+
+
+def classify_task(prompt: str = "") -> str:
+    p = prompt.lower()
+    if any(w in p for w in ["code", "function", "implement", "build", "develop", "api", "class", "debug"]):
+        return "engineering"
+    if any(w in p for w in ["plan", "strategy", "workflow", "json", "automate", "pipeline"]):
+        return "planning"
+    if any(w in p for w in ["analyze", "reasoning", "why", "explain", "evaluate", "compare"]):
+        return "reasoning"
+    if any(w in p for w in ["research", "find", "search", "discover", "investigate"]):
+        return "research"
+    if any(w in p for w in ["write", "content", "blog", "article", "copy", "generate text", "summarize"]):
+        return "content"
+    if any(w in p for w in ["translate", "language", "convert"]):
+        return "language"
+    if any(w in p for w in ["data", "csv", "metrics", "report", "insight"]):
+        return "analysis"
+    return "general"
+
+
+def get_provider_order(task_type: str) -> List[str]:
+    ordered = sorted(PRIMARY_ORDER, key=lambda p: (
+        0 if task_type in PROVIDERS[p]["priority_tasks"] else 1
+    ))
+    return ordered + [f for f in FALLBACK_ORDER if os.environ.get(PROVIDERS[f]["key_env"], "")]
+
+
+async def call_gemini(base_url: str, key: str, messages: List[Dict], max_tokens: int) -> Tuple[bool, str]:
+    url = f"{base_url}?key={key}"
+    parts = []
+    for msg in messages:
+        parts.append({"text": msg.get("content", "")})
+    body = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, json=body)
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                return True, text
+            else:
+                return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    except Exception as e:
+        return False, str(e)
+
+
+async def call_openai_compat(base_url: str, key: str, model: str, messages: List[Dict], max_tokens: int) -> Tuple[bool, str]:
+    url = f"{base_url}/chat/completions"
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.7}
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, json=body, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data["choices"][0]["message"]["content"]
+                return True, text
+            else:
+                return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    except Exception as e:
+        return False, str(e)
+
+
+class GodModeRouter:
     """
-    God Agent OS v8 AI Router.
-    - KeyPool-based multi-key management per provider
-    - Gemini + SambaNova as primary LLMs
-    - Full failover chain
-    - Streaming support via WebSocket
+    Task-aware multi-provider AI router.
+    Primary: Gemini, Sambanova, GitHub Models
+    Fallback: Groq, OpenAI
     """
 
     def __init__(self, ws_manager=None):
         self.ws = ws_manager
-        self._registry = KeyPoolRegistry()
-        self._stats: Dict[str, Dict] = {}
-        self._setup_pools()
+        self._pools: Dict[str, KeyPool] = {}
+        self._stats: Dict[str, Dict] = {name: {"calls": 0, "errors": 0, "latency_ms": []} for name in PROVIDERS}
+        self._load_pools()
 
-    def _setup_pools(self):
-        """Initialize key pools from environment variables."""
-        for cfg in PROVIDER_CONFIG:
-            env_val = os.environ.get(cfg["key_env"], "")
-            if env_val:
-                self._registry.register(cfg["name"], env_val)
-                self._stats[cfg["name"]] = {"calls": 0, "errors": 0, "latency": []}
-            elif cfg["name"] not in self._stats:
-                self._stats[cfg["name"]] = {"calls": 0, "errors": 0, "latency": []}
+    def _load_pools(self):
+        for name, cfg in PROVIDERS.items():
+            raw = os.environ.get(cfg["key_env"], "")
+            if raw:
+                self._pools[name] = KeyPool(raw)
+                log.info("Key pool loaded", provider=name, key_count=self._pools[name].count())
 
-    def _get_available_providers(self) -> List[Dict]:
-        """Return providers with at least one available key, sorted by priority."""
-        available = []
-        for cfg in sorted(PROVIDER_CONFIG, key=lambda x: x["priority"]):
-            pool = self._registry.get(cfg["name"])
-            # Also check single-key env vars (for backward compat)
-            env_val = os.environ.get(cfg["key_env"], "")
-            if (pool and pool.available_count() > 0) or (env_val and not pool):
-                # Register single keys on-the-fly if not pooled
-                if not pool and env_val:
-                    self._registry.register(cfg["name"], env_val)
-                    if cfg["name"] not in self._stats:
-                        self._stats[cfg["name"]] = {"calls": 0, "errors": 0, "latency": []}
-                available.append(cfg)
-        return available
+    def reload_pools(self):
+        self._pools.clear()
+        self._load_pools()
 
-    # ─── Main Entry Point ──────────────────────────────────────────────────────
+    def get_status(self) -> Dict[str, Any]:
+        return {
+            "providers": {
+                name: {
+                    "available": name in self._pools and self._pools[name].has_keys(),
+                    "keys": self._pools[name].count() if name in self._pools else 0,
+                    "stats": self._stats.get(name, {}),
+                }
+                for name in PROVIDERS
+            },
+            "primary_order": PRIMARY_ORDER,
+        }
+
+    # Keep backwards compatibility with old AIRouter interface
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            name: {"available": name in self._pools, "calls": self._stats[name]["calls"]}
+            for name in PROVIDERS
+        }
 
     async def complete(
         self,
@@ -144,264 +224,85 @@ class AIRouterV8:
         session_id: str = "",
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        preferred_model: str = "",
-        stream: bool = True,
+        preferred_provider: str = "",
+        stream: bool = False,
     ) -> str:
-        """Route request through available providers with KeyPool failover."""
-        providers = self._get_available_providers()
+        user_msg = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+        task_type = classify_task(user_msg)
 
-        if not providers:
-            return await self._demo_stream(messages, task_id, session_id)
-
-        last_error = None
-        for cfg in providers:
-            pool = self._registry.get(cfg["name"])
-            if not pool:
-                continue
-
-            key = pool.pick()
-            if not key:
-                continue
-
-            try:
-                start = time.time()
-                result = await self._call_provider(
-                    cfg, key, messages, task_id, session_id,
-                    temperature, max_tokens, preferred_model
-                )
-                elapsed = time.time() - start
-                pool.mark_success(key)
-                self._stats[cfg["name"]]["calls"] += 1
-                self._stats[cfg["name"]]["latency"].append(elapsed)
-                log.info("AIRouter v8 success", provider=cfg["name"], ms=round(elapsed * 1000))
-                return result
-            except Exception as e:
-                last_error = e
-                pool.mark_fail(key)
-                self._stats[cfg["name"]]["errors"] += 1
-                log.warning("AIRouter v8 failover", provider=cfg["name"], error=str(e)[:200])
-                continue
-
-        log.error("All AI providers failed", error=str(last_error))
-        return await self._demo_stream(messages, task_id, session_id)
-
-    async def _call_provider(
-        self, cfg: Dict, key: str, messages: List[Dict],
-        task_id: str, session_id: str, temperature: float,
-        max_tokens: int, preferred_model: str
-    ) -> str:
-        """Dispatch to the correct call method based on provider type."""
-        ptype = cfg["type"]
-        if ptype == "gemini":
-            return await self._gemini_call(cfg, key, messages, task_id, session_id, temperature, max_tokens, preferred_model)
-        elif ptype == "anthropic":
-            return await self._anthropic_call(cfg, key, messages, task_id, session_id, temperature, max_tokens)
+        if preferred_provider and preferred_provider in PROVIDERS:
+            order = [preferred_provider] + [p for p in get_provider_order(task_type) if p != preferred_provider]
         else:
-            return await self._openai_compat_call(cfg, key, messages, task_id, session_id, temperature, max_tokens, preferred_model)
+            order = get_provider_order(task_type)
 
-    # ─── Gemini API ────────────────────────────────────────────────────────────
+        log.info("Routing request", task_type=task_type, order=order[:3], task_id=task_id)
 
-    async def _gemini_call(
-        self, cfg: Dict, key: str, messages: List[Dict],
-        task_id: str, session_id: str, temperature: float,
-        max_tokens: int, preferred_model: str
-    ) -> str:
-        model = preferred_model or cfg["default_model"]
-        url = f"{cfg['base_url']}/v1beta/models/{model}:streamGenerateContent?key={key}&alt=sse"
+        last_error = "No providers available"
 
-        # Convert messages to Gemini format
-        system_instruction = None
-        contents = []
-        for m in messages:
-            if m["role"] == "system":
-                system_instruction = {"parts": [{"text": m["content"]}]}
-            else:
-                role = "user" if m["role"] == "user" else "model"
-                contents.append({"role": role, "parts": [{"text": m["content"]}]})
+        for provider_name in order:
+            if provider_name not in self._pools:
+                continue
 
-        payload: Dict[str, Any] = {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens,
-            },
-        }
-        if system_instruction:
-            payload["systemInstruction"] = system_instruction
+            pool = self._pools[provider_name]
+            cfg = PROVIDERS[provider_name]
 
-        full_text = ""
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream("POST", url, json=payload, headers={"Content-Type": "application/json"}) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    chunk_str = line[5:].strip()
-                    if not chunk_str or chunk_str == "[DONE]":
-                        continue
-                    try:
-                        data = json.loads(chunk_str)
-                        for cand in data.get("candidates", []):
-                            for part in cand.get("content", {}).get("parts", []):
-                                delta = part.get("text", "")
-                                if delta:
-                                    full_text += delta
-                                    await self._emit_chunk(delta, task_id, session_id)
-                    except Exception:
-                        pass
-        return full_text
+            for attempt in range(MAX_RETRIES_PER_KEY):
+                key_obj = pool.pick()
+                if key_obj is None:
+                    break
 
-    # ─── OpenAI-compatible ─────────────────────────────────────────────────────
+                t0 = time.time()
+                try:
+                    if cfg["type"] == "gemini":
+                        ok, text = await call_gemini(cfg["base_url"], key_obj["key"], messages, max_tokens)
+                    else:
+                        ok, text = await call_openai_compat(
+                            cfg["base_url"], key_obj["key"],
+                            cfg["default_model"], messages, max_tokens
+                        )
 
-    async def _openai_compat_call(
-        self, cfg: Dict, key: str, messages: List[Dict],
-        task_id: str, session_id: str, temperature: float,
-        max_tokens: int, preferred_model: str
-    ) -> str:
-        model = preferred_model or cfg["default_model"]
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        }
-        if cfg["name"] == "openrouter":
-            headers["HTTP-Referer"] = "https://god-agent.ai"
-            headers["X-Title"] = "God Agent OS"
+                    elapsed = int((time.time() - t0) * 1000)
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        full_text = ""
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream(
-                "POST", f"{cfg['base_url']}/chat/completions",
-                headers=headers, json=payload
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    chunk = line[6:].strip()
-                    if chunk == "[DONE]":
-                        break
-                    try:
-                        data = json.loads(chunk)
-                        delta = data["choices"][0]["delta"].get("content", "")
-                        if delta:
-                            full_text += delta
-                            await self._emit_chunk(delta, task_id, session_id)
-                    except Exception:
-                        pass
-        return full_text
+                    if ok and text.strip():
+                        pool.mark_success(key_obj)
+                        self._stats[provider_name]["calls"] += 1
+                        self._stats[provider_name]["latency_ms"].append(elapsed)
+                        log.info("LLM success", provider=provider_name, ms=elapsed, task_id=task_id)
+                        return text
+                    else:
+                        pool.mark_fail(key_obj)
+                        last_error = text
+                        log.warning("LLM fail", provider=provider_name, error=text[:80])
 
-    # ─── Anthropic ─────────────────────────────────────────────────────────────
+                except Exception as e:
+                    pool.mark_fail(key_obj)
+                    last_error = str(e)
+                    self._stats[provider_name]["errors"] += 1
+                    log.error("LLM exception", provider=provider_name, error=str(e)[:120])
 
-    async def _anthropic_call(
-        self, cfg: Dict, key: str, messages: List[Dict],
-        task_id: str, session_id: str, temperature: float, max_tokens: int
-    ) -> str:
-        headers = {
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        }
-        system = ""
-        filtered = []
-        for m in messages:
-            if m["role"] == "system":
-                system = m["content"]
-            else:
-                filtered.append(m)
-        payload: Dict[str, Any] = {
-            "model": cfg["default_model"],
-            "max_tokens": max_tokens,
-            "messages": filtered,
-            "stream": True,
-            "temperature": temperature,
-        }
-        if system:
-            payload["system"] = system
-        full_text = ""
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream(
-                "POST", f"{cfg['base_url']}/messages",
-                headers=headers, json=payload
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    try:
-                        data = json.loads(line[5:].strip())
-                        if data.get("type") == "content_block_delta":
-                            delta = data["delta"].get("text", "")
-                            if delta:
-                                full_text += delta
-                                await self._emit_chunk(delta, task_id, session_id)
-                    except Exception:
-                        pass
-        return full_text
+        log.error("All providers failed, using demo response", last_error=last_error)
+        return await self._demo_response(messages, task_type)
 
-    # ─── Demo Stream ───────────────────────────────────────────────────────────
-
-    async def _demo_stream(self, messages: List[Dict], task_id: str, session_id: str) -> str:
-        last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "Hello")
-        response = (
-            "🤖 **God Agent OS v8** (Demo Mode)\n\n"
-            f"Received: *{last_user[:100]}*\n\n"
-            "To enable full AI power, set API keys in environment variables:\n"
-            "- `GEMINI_API_KEYS` (Google Gemini — multiple keys supported)\n"
-            "- `SAMBANOVA_API_KEYS` (SambaNova — multiple keys supported)\n"
-            "- `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`\n\n"
-            "**Active Capabilities:**\n"
-            "- ⚡ 16-agent autonomous orchestration\n"
-            "- 🔑 Multi-key pool with automatic failover\n"
-            "- 🧠 Persistent memory system\n"
-            "- 🔌 Connector ecosystem\n"
-            "- 📡 Real-time WebSocket streaming\n"
+    async def _demo_response(self, messages: List[Dict], task_type: str) -> str:
+        user_msg = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "Hello")
+        return (
+            f"[GOD AGENT OS — Demo Mode]\n\n"
+            f"Task type detected: {task_type}\n"
+            f"Your request: '{user_msg[:100]}'\n\n"
+            f"Configure API keys in environment:\n"
+            f"GEMINI_KEY, SAMBANOVA_KEY, GITHUB_KEY"
         )
-        full_text = ""
-        for word in response.split():
-            chunk = word + " "
-            full_text += chunk
-            await asyncio.sleep(0.02)
-            await self._emit_chunk(chunk, task_id, session_id, demo=True)
-        return full_text
 
-    # ─── Emit Helper ───────────────────────────────────────────────────────────
 
-    async def _emit_chunk(self, chunk: str, task_id: str, session_id: str, demo: bool = False):
-        if not self.ws:
-            return
-        payload = {"chunk": chunk, "demo": demo}
-        if task_id:
-            await self.ws.emit(task_id, "llm_chunk", payload, session_id=session_id)
-        elif session_id:
-            await self.ws.emit_chat(session_id, "llm_chunk", payload)
+_router_instance: Optional[GodModeRouter] = None
 
-    # ─── Stats ─────────────────────────────────────────────────────────────────
 
-    def get_stats(self) -> Dict:
-        result = {}
-        for cfg in PROVIDER_CONFIG:
-            name = cfg["name"]
-            s = self._stats.get(name, {"calls": 0, "errors": 0, "latency": []})
-            pool = self._registry.get(name)
-            lat = s["latency"][-20:]
-            avg_lat = round(sum(lat) / max(len(lat), 1) * 1000, 1) if lat else 0
-            result[name] = {
-                "calls": s["calls"],
-                "errors": s["errors"],
-                "avg_latency_ms": avg_lat,
-                "available": bool(os.environ.get(cfg["key_env"], "")),
-                "key_count": len(pool) if pool else 0,
-                "available_keys": pool.available_count() if pool else 0,
-                "priority": cfg["priority"],
-            }
-        return result
+def get_router(ws_manager=None) -> GodModeRouter:
+    global _router_instance
+    if _router_instance is None:
+        _router_instance = GodModeRouter(ws_manager)
+    return _router_instance
 
-    def get_pool_status(self) -> Dict:
-        return self._registry.all_status()
+
+# Backwards compat alias
+AIRouterV8 = GodModeRouter

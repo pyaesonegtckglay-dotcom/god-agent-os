@@ -1,6 +1,6 @@
-# Multi-Model AI Router — God Agent OS v8
+# Multi-Model AI Router — GOD AGENT OS v8
+# Primary: Gemini → Sambanova → GitHub Models (task-aware rotation)
 from .router import AIRouter
-from .router_v8 import AIRouterV8
-from .key_pool import KeyPool, KeyPoolRegistry
+from .router_v8 import GodModeRouter, get_router, classify_task, get_provider_order
 
-__all__ = ["AIRouter", "AIRouterV8", "KeyPool", "KeyPoolRegistry"]
+__all__ = ["AIRouter", "GodModeRouter", "get_router", "classify_task", "get_provider_order"]

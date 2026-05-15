@@ -1,6 +1,6 @@
 {
-  "name": "god-mode-plus-ui",
-  "version": "3.0.0",
+  "name": "god-agent-os-ui",
+  "version": "8.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
@@ -9,6 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.1.9",
