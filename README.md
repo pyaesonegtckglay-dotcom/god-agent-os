@@ -1,5 +1,5 @@
 ---
-title: God Agent OS v7
+title: God Agent OS v8
 emoji: 🤖
 colorFrom: indigo
 colorTo: purple
@@ -7,24 +7,39 @@ sdk: docker
 app_port: 7860
 pinned: true
 license: mit
-short_description: Autonomous Engineering OS — Manus + Genspark + Devin (OneHand)
+short_description: Autonomous Engineering OS v8 — KeyPool Multi-API (Gemini + SambaNova)
 ---
 
-# 🤖 GOD AGENT OS v7
+# 🤖 GOD AGENT OS v8
 **Autonomous Engineering Operating System**
-*Manus + Genspark + Devin (OneHand) — Combined*
+*Manus + Genspark + Devin (OneHand) — KeyPool Multi-API Edition*
 
 [![GitHub](https://img.shields.io/badge/GitHub-god--agent--os-blue?logo=github)](https://github.com/pyaesonegtckglay-dotcom/god-agent-os)
-[![Version](https://img.shields.io/badge/version-7.0.0-indigo)](https://github.com/pyaesonegtckglay-dotcom/god-agent-os)
+[![Version](https://img.shields.io/badge/version-8.0.0-indigo)](https://github.com/pyaesonegtckglay-dotcom/god-agent-os)
+[![HF Space](https://img.shields.io/badge/HF%20Space-PYAE1994-orange)](https://huggingface.co/spaces/PYAE1994/autonomous-coding-system)
 
-## 🚀 What is God Agent OS?
+## 🚀 What is God Agent OS v8?
 
-God Agent OS is a fully autonomous AI engineering platform that combines:
-- **Manus** — Deep reasoning, multi-step planning, autonomous orchestration
-- **Genspark** — Repository-scale code generation, multi-model AI routing
-- **Devin/OneHand** — Self-healing code execution, browser control, file mastery
+God Agent OS v8 is a fully autonomous AI engineering platform with **KeyPool Multi-API Routing**:
+- **Gemini** (6 keys) — Google Gemini 1.5 Flash primary LLM
+- **SambaNova** (9 keys) — Meta Llama 3.3 70B primary LLM
+- **GitHub API** (9 keys) — Pooled Git operations
+- **Automatic failover** across 7 providers
 
-## 🤖 16-Agent Fleet (v7 NEW!)
+## 🔑 v8 KeyPool System
+
+```
+Priority Chain:
+SambaNova (9 keys) → Gemini (6 keys) → OpenAI → Groq → Cerebras → OpenRouter → Anthropic
+
+Each key pool:
+- Round-robin key selection
+- Failure tracking per key
+- Automatic cooldown (60s after 3 failures)
+- Real-time status dashboard in UI
+```
+
+## 🤖 16-Agent Fleet
 
 | Agent | Capability | Status |
 |-------|-----------|--------|
@@ -32,52 +47,61 @@ God Agent OS is a fully autonomous AI engineering platform that combines:
 | 📋 Planner | Task decomposition & planning | Core |
 | 💻 Coding | Production code generation | Core |
 | 🐛 Debug | Self-healing error resolution | Core |
-| 🌐 **Browser** | Web research & scraping | ⭐ NEW v7 |
-| 📁 **File** | File system & project scaffold | ⭐ NEW v7 |
-| 🔀 **Git** | Git ops & GitHub PR creation | ⭐ NEW v7 |
-| 🧪 **Test** | Auto test generation & execution | ⭐ NEW v7 |
-| 🎨 **Vision** | Design-to-code UI generation | ⭐ NEW v7 |
+| 🌐 Browser | Web research & scraping | v7 |
+| 📁 File | File system & project scaffold | v7 |
+| 🔀 Git | Git ops & GitHub PR creation | v7 |
+| 🧪 Test | Auto test generation & execution | v7 |
+| 🎨 Vision | Design-to-code UI generation | v7 |
 | 🖥️ Sandbox | Isolated code execution | Core |
 | 🚀 Deploy | Auto-deploy to cloud | Core |
 | 🔌 Connector | External integrations | Core |
 | 🧠 Memory | Long-term context | Core |
 | ⚙️ Workflow | n8n automation | Core |
+| 🔍 Reasoning | Deep reasoning & analysis | Core |
+| 🎨 UI | Real-time UI state | Core |
 
-## 🔑 Required API Keys
+## 🔑 API Keys Configuration
 
-Set these in Space Settings → Variables and Secrets:
+Set these in Hugging Face Space → Settings → Variables:
 
-| Variable | Description | Required |
-|----------|-------------|----------|
+| Variable | Description | Keys |
+|----------|-------------|------|
+| `GEMINI_API_KEYS` | Google Gemini (comma-separated) | 6 keys |
+| `SAMBANOVA_API_KEYS` | SambaNova (comma-separated) | 9 keys |
+| `GITHUB_API_KEYS` | GitHub API (comma-separated) | 9 keys |
 | `OPENAI_API_KEY` | GPT-4o | Optional |
-| `GROQ_API_KEY` | Llama 3.3 70B (Free!) | Recommended |
-| `OPENROUTER_API_KEY` | 100+ models | Optional |
+| `GROQ_API_KEY` | Llama 3.3 70B (Free) | Optional |
 | `ANTHROPIC_API_KEY` | Claude 3.5 | Optional |
-| `GITHUB_TOKEN` | Git operations | Optional |
-
-> **Note:** System works in demo mode without any keys. Add at least `GROQ_API_KEY` for full AI power (it's free!).
 
 ## 🌐 API Documentation
 
 - Interactive docs: `/api/docs`
 - Health check: `/health`
+- AI Router stats: `/api/v1/ai/stats`
+- Key pool status: `/api/v1/ai/pool-status`
 
 ## 📦 Architecture
 
 ```
 god-agent-os/
-├── backend/          # FastAPI backend (16 agents)
-│   ├── agents/       # All 16 specialized agents
-│   ├── ai_router/    # Multi-model AI router (5 providers)
-│   ├── api/          # REST + WebSocket endpoints
-│   ├── core/         # Task engine & models
-│   ├── memory/       # SQLite persistent memory
-│   └── connectors/   # External service connectors
-└── frontend/         # Next.js 14 UI (deployed on Vercel)
+├── backend/
+│   ├── agents/         # 16 specialized agents
+│   ├── ai_router/
+│   │   ├── key_pool.py    # KeyPool multi-key manager (NEW v8)
+│   │   ├── router_v8.py   # AIRouterV8 with KeyPool (NEW v8)
+│   │   └── router.py      # Legacy router (retained)
+│   ├── api/            # REST + WebSocket endpoints
+│   ├── core/           # Task engine & models
+│   ├── memory/         # SQLite persistent memory
+│   ├── connectors/     # External service connectors
+│   ├── main_v8.py      # v8 Entry point (NEW)
+│   └── Dockerfile.hf   # HF Spaces Docker
+└── frontend/           # Next.js 14 UI
+    └── components/
+        └── layout/
+            └── AIRouterPanel.tsx  # v8 Key pool status UI (NEW)
 ```
 
 ## 🔄 Auto-Deploy Pipeline
 
 GitHub Push → Build Check → HF Space Deploy + Vercel Deploy
-
-All automatic via GitHub Actions!

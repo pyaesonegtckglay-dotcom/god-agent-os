@@ -1,8 +1,30 @@
 """
-🚀 GOD MODE+ Autonomous AI Operating System
-Devin + Manus + Genspark Style — Production-Grade Backend
-Version: 3.0.0 — Full God Mode Upgrade
+🚀 GOD AGENT OS — Autonomous AI Operating System v8
+Gemini + Sambanova + GitHub Models — Primary Provider Rotation
+Task-aware routing: research→Gemini, code→Sambanova, plan→GitHub
 """
+
+# ─── Inject bundled API keys (env vars take precedence) ───────────────────────
+import os as _os
+
+def _inject_key(env_var: str, value: str):
+    """Set env var only if not already configured."""
+    if not _os.environ.get(env_var):
+        _os.environ[env_var] = value
+
+# Keys are loaded from HF Space Secrets / Docker env vars.
+# Set GEMINI_KEY, SAMBANOVA_KEY, GITHUB_KEY as comma-separated lists.
+# Fallback: read from .env.keys file if present (not committed to git).
+_keys_file = _os.path.join(_os.path.dirname(__file__), ".env.keys")
+if _os.path.exists(_keys_file):
+    with open(_keys_file) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and "=" in _line and not _line.startswith("#"):
+                _k, _v = _line.split("=", 1)
+                _inject_key(_k.strip(), _v.strip())
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 import asyncio
 import json
@@ -30,6 +52,7 @@ from memory.db import init_db
 
 # ─── God Mode Agents ───────────────────────────────────────────────────────────
 from ai_router.router import AIRouter
+from ai_router.router_v8 import GodModeRouter, get_router as get_god_router
 from agents.orchestrator import GodAgentOrchestrator
 from agents.chat_agent import ChatAgent
 from agents.planner_agent import PlannerAgent
@@ -61,6 +84,7 @@ limiter = Limiter(key_func=get_remote_address)
 ws_manager = WebSocketManager()
 task_engine = TaskEngine(ws_manager)
 ai_router = AIRouter(ws_manager)
+god_router = get_god_router(ws_manager)   # v8 primary router
 connector_manager = ConnectorManager()
 
 # ─── Build God Agent Ecosystem ────────────────────────────────────────────────
@@ -94,7 +118,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(ws_manager.heartbeat_loop())
     log.info("✅ GOD MODE+ Platform ready — All agents online")
     log.info("🤖 Agents: Chat, Planner, Coding, Debug, Memory, Connector, Deploy, Workflow, Sandbox, UI")
-    log.info("🌐 AI Router: OpenAI → Groq → Cerebras → OpenRouter → Anthropic")
+    log.info("🌐 AI Router v8: Gemini → Sambanova → GitHub Models (task-aware rotation)")
     yield
     log.info("🛑 Shutting down...")
     await task_engine.stop()

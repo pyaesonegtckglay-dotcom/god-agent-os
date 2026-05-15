@@ -4,14 +4,16 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://PYAE1994-autonomous-coding-system.hf.space"
+    "NEXT_PUBLIC_API_URL": "https://PYAE1994-autonomous-coding-system.hf.space",
+    "NEXT_PUBLIC_APP_VERSION": "8.0.0",
+    "NEXT_PUBLIC_APP_NAME": "GOD AGENT OS"
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }

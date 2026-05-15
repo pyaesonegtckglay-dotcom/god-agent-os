@@ -1,4 +1,4 @@
-name: 🚀 God Agent OS v7 — Auto Deploy
+name: 🚀 God Agent OS v8 — Auto Deploy
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   VERCEL_PROJECT: god-agent-os
 
 jobs:
-  # ── Build & Test ──────────────────────────────────────────────────────────
+  # ── Build & Syntax Check ──────────────────────────────────────────────────
   build-check:
     name: ✅ Build Check
     runs-on: ubuntu-latest
@@ -28,10 +28,12 @@ jobs:
           cd backend
           pip install -r requirements.txt
 
-      - name: Syntax check backend
+      - name: Syntax check backend (v8)
         run: |
           cd backend
-          python -m py_compile main_v7.py
+          python -m py_compile main_v8.py
+          python -m py_compile ai_router/router_v8.py
+          python -m py_compile ai_router/key_pool.py
           python -m py_compile agents/orchestrator_v7.py
           python -m py_compile agents/browser_agent.py
           python -m py_compile agents/file_agent.py
@@ -55,7 +57,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://PYAE1994-autonomous-coding-system.hf.space' }}
 
-  # ── Deploy to Hugging Face Spaces ─────────────────────────────────────────
+  # ── Deploy to Hugging Face Spaces ────────────────────────────────────────
   deploy-huggingface:
     name: 🤗 Deploy to HF Spaces
     runs-on: ubuntu-latest
@@ -72,23 +74,24 @@ jobs:
           git config --global user.email "action@github.com"
           git config --global user.name "God Agent CI"
 
-      - name: Deploy backend to HF Space
+      - name: Deploy backend to HF Space (v8)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Install HF CLI
           pip install huggingface_hub -q
 
-          # Clone HF space
           git clone https://pyae1994:$HF_TOKEN@huggingface.co/spaces/PYAE1994/autonomous-coding-system /tmp/hf-space
-          
+
           # Copy backend files
           cp -r backend/. /tmp/hf-space/
-          
-          # Create HF-specific README
+
+          # Use v8 Dockerfile
+          cp backend/Dockerfile.hf /tmp/hf-space/Dockerfile
+
+          # Create HF README with v8 metadata
           cat > /tmp/hf-space/README.md << 'EOF'
           ---
-          title: God Agent OS v7
+          title: God Agent OS v8
           emoji: 🤖
           colorFrom: indigo
           colorTo: purple
@@ -96,27 +99,23 @@ jobs:
           app_port: 7860
           pinned: true
           license: mit
-          short_description: Autonomous Engineering OS — Manus + Genspark + Devin
+          short_description: Autonomous Engineering OS v8 — KeyPool Multi-API (Gemini + SambaNova)
           ---
 
-          # 🤖 God Agent OS v7
-          **Autonomous Engineering Platform — Manus + Genspark + Devin (OneHand)**
+          # 🤖 God Agent OS v8
+          **KeyPool Multi-API Routing — Gemini + SambaNova Primary LLMs**
 
-          16-agent system for autonomous software engineering.
+          16-agent autonomous engineering OS with intelligent key pooling.
           EOF
 
-          # Use HF Dockerfile
-          cp backend/Dockerfile.hf /tmp/hf-space/Dockerfile
-
-          # Commit and push
           cd /tmp/hf-space
           git add -A
-          git diff --cached --quiet || git commit -m "🚀 God Agent OS v7 deploy $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          git diff --cached --quiet || git commit -m "🚀 God Agent OS v8 deploy $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           git push origin main || git push origin master || true
-          
+
           echo "✅ Deployed to HF Space: https://huggingface.co/spaces/PYAE1994/autonomous-coding-system"
 
-  # ── Deploy to Vercel ───────────────────────────────────────────────────────
+  # ── Deploy to Vercel ─────────────────────────────────────────────────────
   deploy-vercel:
     name: ▲ Deploy to Vercel
     runs-on: ubuntu-latest
