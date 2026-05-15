@@ -1,5 +1,7 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7860'
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:7860'
+const HF_SPACE = 'https://pyae1994-autonomous-coding-system.hf.space'
+const HF_SPACE_WS = 'wss://pyae1994-autonomous-coding-system.hf.space'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || HF_SPACE
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || HF_SPACE_WS
 
 export const API_URL = API_BASE
 export const WS_URL = WS_BASE
