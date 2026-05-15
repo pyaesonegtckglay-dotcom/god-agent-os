@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { getMemory, searchMemory } from '@/lib/api'
+import { getMemory } from '@/lib/api'
+const searchMemory = (q: string) => fetch('/api/v1/memory/search?q=' + encodeURIComponent(q)).then(r => r.json())
 import { Brain, Search, RefreshCw, MessageSquare, Settings, Code2, User } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -24,7 +25,7 @@ export default function MemoryPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await getMemory(sessionId, 30)
+      const data = await getMemory()
       setMemories(Array.isArray(data) ? data : data.memories || [])
     } catch {}
     setLoading(false)
@@ -34,7 +35,7 @@ export default function MemoryPanel() {
     if (!query.trim()) { load(); return }
     setSearching(true)
     try {
-      const data = await searchMemory(query, sessionId)
+      const data = await searchMemory(query)
       setMemories(Array.isArray(data) ? data : data.results || [])
     } catch {}
     setSearching(false)

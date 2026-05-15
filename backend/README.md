@@ -1,7 +1,7 @@
 ---
 title: God Agent OS v9 Backend
 emoji: 🤖
-colorFrom: violet
+colorFrom: purple
 colorTo: indigo
 sdk: docker
 pinned: false

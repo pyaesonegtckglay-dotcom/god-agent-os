@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Search, Filter, Plus, Bot, Activity, Zap } from 'lucide-react'
-type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string; description: string; tasks: number }
+type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string; description: string; tasks: number; color?: string; [key: string]: any }
 const AGENTS: Agent[] = [
   { id: 'core', name: 'Core Space', status: 'active', icon: '🧠', role: 'Cognition', space: 'core', description: 'Planning & orchestration', tasks: 0 },
   { id: 'browser', name: 'Browser Space', status: 'idle', icon: '🌐', role: 'Automation', space: 'browser', description: 'Web research & navigation', tasks: 0 },

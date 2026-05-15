@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Cpu, MemoryStick, HardDrive, Wifi } from 'lucide-react'
-// import { useAppStore } from '@/store/useAppStore'
-
 const RESOURCE_CONFIGS = [
   { key: 'cpu',     label: 'CPU',     icon: Cpu,          color: '#6366f1' },
   { key: 'memory',  label: 'Memory',  icon: MemoryStick,  color: '#22d3ee' },
@@ -13,7 +11,8 @@ const RESOURCE_CONFIGS = [
 ] as const
 
 export default function SystemResources() {
-  const { systemResources, updateSystemResources } = useAppStore()
+  const systemResources = { cpu: 42, memory: 61, storage: 30, network: 78 }
+  const updateSystemResources = (_: any) => {}
 
   // Simulate live fluctuation
   useEffect(() => {

@@ -2,7 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { sandboxExecute, sandboxWriteFile, getWorkspaceInfo } from '@/lib/api'
+import { fetchAPI } from '@/lib/api'
+const sandboxExecute = (cmd: string, sid: string) => fetchAPI('/api/v1/spaces/sandbox/execute', { method: 'POST', body: JSON.stringify({ task: cmd, role: 'execution', session_id: sid }) })
+const sandboxWriteFile = (path: string, content: string) => fetchAPI('/api/v1/files/write', { method: 'POST', body: JSON.stringify({ path, content }) })
+const getWorkspaceInfo = () => fetchAPI('/api/v1/files/workspace')
 import { Terminal, Play, FolderOpen, File, RefreshCw, ChevronRight, Zap, ExternalLink, Code2 } from 'lucide-react'
 
 const VSCODE_HF_URL = 'https://pyae1994-god-agent-vscode.hf.space'
@@ -51,7 +54,7 @@ export default function SandboxPanel() {
     setCmd('')
     setLoading(true)
     try {
-      const res = await sandboxExecute(c)
+      const res = await sandboxExecute(c, 'sandbox_panel')
       const output = res.result || ''
       output.split('\n').forEach((line: string) => {
         setLines(l => [...l, { type: 'output', text: line, time: '' }])

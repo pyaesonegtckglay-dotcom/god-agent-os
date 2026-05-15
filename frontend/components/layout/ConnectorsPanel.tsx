@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { getConnectors, setConnectorToken } from '@/lib/api'
+import { getConnectors } from '@/lib/api'
+const setConnectorToken = (id: string, token: string) => fetch('/api/v1/connectors/' + id + '/token', { method: 'POST', body: JSON.stringify({ token }), headers: { 'Content-Type': 'application/json' } })
 import { Plug, CheckCircle2, XCircle, Eye, EyeOff, ChevronRight, RefreshCw, Zap } from 'lucide-react'
 
 const CATEGORY_LABELS: Record<string, string> = {

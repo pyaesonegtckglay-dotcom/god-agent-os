@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { CheckSquare, Clock, Loader2, AlertCircle, Plus, ChevronRight } from 'lucide-react'
-type Task = { id: string; title: string; status: 'running' | 'completed' | 'pending' | 'failed'; space?: string; agent?: string; goal: string; started?: number; completed_at?: number }
+type Task = { id: string; title: string; status: 'running' | 'completed' | 'pending' | 'failed'; space?: string; agent?: string; goal: string; started?: number; completed_at?: number; createdAt?: string; completedAt?: string; progress?: number; [key: string]: any }
 const TASKS: Task[] = []
 import { cn } from '@/lib/utils'
 

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
-import { getTasks, cancelTask, retryTask } from '@/lib/api'
+import { getTasks, fetchAPI } from '@/lib/api'
+const cancelTask = (id: string) => fetchAPI('/api/v1/tasks/' + id + '/cancel', { method: 'POST' })
+const retryTask = (id: string) => fetchAPI('/api/v1/tasks/' + id + '/retry', { method: 'POST' })
 import { ListTodo, Play, Square, RefreshCw, Clock, CheckCircle2, XCircle, Loader2, Zap } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -22,7 +24,7 @@ export default function TasksPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await getTasks(sessionId, 30)
+      const data = await getTasks()
       setTasks(Array.isArray(data) ? data : data.tasks || [])
     } catch {}
     setLoading(false)

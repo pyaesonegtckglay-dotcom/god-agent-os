@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string }
+type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string; color?: string; description?: string; tasks?: number; model?: string; tasksCompleted?: number; uptime?: string; efficiency?: number; [key: string]: any }
 import { cn, getStatusColor } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 
