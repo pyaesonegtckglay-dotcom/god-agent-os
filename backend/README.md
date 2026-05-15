@@ -1,52 +1,43 @@
-# 🤖 GOD AGENT OS v7 — Autonomous Engineering Platform
-> **Manus + Genspark + Devin (OneHand)** Combined
+---
+title: God Agent OS v9 Backend
+emoji: 🤖
+colorFrom: violet
+colorTo: indigo
+sdk: docker
+pinned: false
+license: mit
+app_port: 7860
+---
 
-## Overview
-GOD AGENT OS v7 is a production-grade autonomous AI engineering operating system with 16 specialized agents working in parallel.
+# GOD AGENT OS v9 — Backend API
+**Space-Role Architecture | General Autonomous Agent OS**
+*Powered by Pyae Sone*
 
-## 🚀 Quick Start (HuggingFace Space)
-Set environment variables in HF Space secrets:
+## Architecture
+
 ```
-OPENAI_API_KEY=sk-...        # or any below
-GROQ_API_KEY=gsk_...         # Free Llama 3.3 70B
-OPENROUTER_API_KEY=sk-or-... # Multi-model
-ANTHROPIC_API_KEY=sk-ant-... # Claude 3.5
-GITHUB_TOKEN=ghp_...         # Git operations
-WORKSPACE_DIR=/tmp/god_workspace
+Agent Kernel (v9)
+├── Core Space        — Planning & Orchestration
+├── Browser Space     — Web Research & Navigation  
+├── Sandbox Space     — Code Execution
+├── Coding Space      — Code Generation
+├── Vision Space      — UI Design & Image Analysis
+├── Debug Space       — Error Analysis & Self-Healing
+├── Deploy Space      — Cloud Deployments
+└── Communication     — Docs & Messaging
 ```
 
-## 🤖 16-Agent Fleet
-| Agent | Role |
-|-------|------|
-| OrchestratorV7 | Central brain, routes & coordinates |
-| PlannerAgent | Task graph decomposition |
-| CodingAgent | Production code generation |
-| DebugAgent | Self-healing error resolution |
-| **BrowserAgent** ⭐ | Web research & scraping |
-| **FileAgent** ⭐ | File system & project scaffolding |
-| **GitAgent** ⭐ | Git operations & PR creation |
-| **TestAgent** ⭐ | Test generation & execution |
-| **VisionAgent** ⭐ | Design-to-code UI generation |
-| SandboxAgent | Isolated code execution |
-| DeployAgent | Auto-deploy to cloud platforms |
-| ConnectorAgent | External integrations |
-| MemoryAgent | Long-term context |
-| WorkflowAgent | n8n automation |
-| UIAgent | Real-time UI state |
-| ReasoningAgent | Deep reasoning chains |
+## Roles
+- **Cognition** — The Thinker
+- **Automation** — The Operator
+- **Execution** — The Doer
+- **Repair** — The Fixer
+- **Visual Intelligence** — The Observer
 
 ## API Endpoints
 - `GET /` — System status
-- `GET /api/docs` — Interactive API docs
-- `POST /api/v1/chat/stream` — Chat with God Agent
-- `POST /api/v1/tasks` — Create autonomous task
-- `POST /api/v1/browser/research` — Web research
-- `GET /api/v1/files/workspace` — List workspace
-- `POST /api/v1/git/pr` — Create GitHub PR
-- `POST /api/v1/vision/generate` — Generate UI
-
-## WebSocket Endpoints
+- `GET /api/v1/spaces` — List all Spaces
+- `POST /api/v1/spaces/{name}/execute` — Execute in Space
+- `POST /api/v1/kernel/orchestrate` — Main orchestration
 - `WS /ws/chat/{session_id}` — Real-time chat
-- `WS /ws/tasks/{task_id}` — Task execution stream
-- `WS /ws/sandbox/{session_id}` — Terminal stream
-- `WS /ws/agent/status` — Agent status updates
+- `GET /api/docs` — Swagger UI

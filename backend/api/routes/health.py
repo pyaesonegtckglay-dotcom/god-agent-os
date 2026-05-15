@@ -22,10 +22,16 @@ async def health(request: Request):
     cs = connector_manager.get_summary() if connector_manager else {}
     ai_stats = ai_router.get_stats() if ai_router else {}
 
+    kernel = getattr(request.app.state, "kernel", None)
+    kernel_status = kernel.get_status() if kernel else {}
+    
     return {
         "status": "healthy",
-        "name": "GOD MODE+ AI Operating System",
-        "version": "3.0.0",
+        "name": "GOD AGENT OS v9 — General Autonomous Agent OS",
+        "version": "9.0.0",
+        "powered_by": "Pyae Sone",
+        "architecture": "Space-Role Paradigm",
+        "spaces": kernel_status.get("spaces", []),
         "timestamp": time.time(),
         "platform": {
             "mode": "god_mode_plus",

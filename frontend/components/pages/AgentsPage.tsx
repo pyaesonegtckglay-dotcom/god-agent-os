@@ -3,7 +3,17 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Search, Filter, Plus, Bot, Activity, Zap } from 'lucide-react'
-import { AGENTS, Agent } from '@/store/useAppStore'
+type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string; description: string; tasks: number }
+const AGENTS: Agent[] = [
+  { id: 'core', name: 'Core Space', status: 'active', icon: '🧠', role: 'Cognition', space: 'core', description: 'Planning & orchestration', tasks: 0 },
+  { id: 'browser', name: 'Browser Space', status: 'idle', icon: '🌐', role: 'Automation', space: 'browser', description: 'Web research & navigation', tasks: 0 },
+  { id: 'sandbox', name: 'Sandbox Space', status: 'idle', icon: '💻', role: 'Execution', space: 'sandbox', description: 'Code execution', tasks: 0 },
+  { id: 'coding', name: 'Coding Space', status: 'idle', icon: '🔧', role: 'Execution', space: 'coding', description: 'Code generation', tasks: 0 },
+  { id: 'vision', name: 'Vision Space', status: 'idle', icon: '👁️', role: 'Visual Intelligence', space: 'vision', description: 'UI & image analysis', tasks: 0 },
+  { id: 'debug', name: 'Debug Space', status: 'idle', icon: '🐛', role: 'Repair', space: 'debug', description: 'Error analysis', tasks: 0 },
+  { id: 'deploy', name: 'Deploy Space', status: 'idle', icon: '🚀', role: 'Automation', space: 'deploy', description: 'Cloud deployments', tasks: 0 },
+  { id: 'communication', name: 'Comm Space', status: 'idle', icon: '💬', role: 'Automation', space: 'communication', description: 'Docs & messaging', tasks: 0 },
+]
 import { getStatusColor, cn } from '@/lib/utils'
 
 const STATUS_FILTERS = ['All', 'Active', 'Processing', 'Idle', 'Error']

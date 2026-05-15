@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { ACTIVITY } from '@/store/useAppStore'
+const ACTIVITY: any[] = []
 import { CheckCircle2, Loader2, Info, AlertTriangle } from 'lucide-react'
 
 const TypeIcon = ({ type }: { type: string }) => {

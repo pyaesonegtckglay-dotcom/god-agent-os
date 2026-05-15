@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { CheckSquare, Clock, Loader2, AlertCircle, Plus, ChevronRight } from 'lucide-react'
-import { TASKS, Task } from '@/store/useAppStore'
+type Task = { id: string; title: string; status: 'running' | 'completed' | 'pending' | 'failed'; space?: string; agent?: string; goal: string; started?: number; completed_at?: number }
+const TASKS: Task[] = []
 import { cn } from '@/lib/utils'
 
 const STATUS_CONFIG = {

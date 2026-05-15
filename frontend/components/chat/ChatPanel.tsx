@@ -3,7 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAgentStore } from '@/hooks/useAgentStore'
 import { useChatWebSocket } from '@/hooks/useWebSocket'
-import { createTask, streamChatSSE } from '@/lib/api'
+import { fetchAPI } from '@/lib/api'
+const createTask = (goal: any, sessionId?: string) => fetchAPI('/api/v1/tasks/', { method: 'POST', body: JSON.stringify({ goal, session_id: sessionId }) })
+const streamChatSSE = async (msgs: any[], sessionId: string, onChunk: (c: string) => void, onDone: (f: string) => void, onErr: (e: string) => void) => {
+  try {
+    const res = await fetchAPI('/api/v1/kernel/orchestrate', { method: 'POST', body: JSON.stringify({ message: msgs[msgs.length-1]?.content || '', session_id: sessionId }) })
+    onDone(res.result || 'Response received.')
+  } catch(e: any) { onErr(e.message) }
+}
 import MessageBubble from './MessageBubble'
 import {
   Send, Square, Zap, MessageSquare, Code2, GitBranch, Brain,

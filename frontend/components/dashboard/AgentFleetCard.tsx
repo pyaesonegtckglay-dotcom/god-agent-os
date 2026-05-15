@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Agent } from '@/store/useAppStore'
+type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string }
 import { cn, getStatusColor } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 

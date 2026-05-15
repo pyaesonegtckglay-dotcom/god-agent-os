@@ -2,36 +2,27 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl build-essential && \
-    rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc g++ libffi-dev libssl-dev curl nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
 
-# Python deps
+# Copy backend requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend source
+# Copy backend code
 COPY . .
 
-# Workspace dir
-RUN mkdir -p /tmp/god_workspace
+# Create sandbox workspace
+RUN mkdir -p /tmp/god_sandbox
 
-# HF Spaces runs on port 7860
-ENV PORT=7860
-ENV WORKSPACE_DIR=/tmp/god_workspace
-ENV PYTHONPATH=/app
-
-# API Keys are configured via HF Space Secrets (Settings → Variables and Secrets)
-# Set these in your HF Space:
-#   GEMINI_API_KEYS      — comma-separated Gemini API keys
-#   SAMBANOVA_API_KEYS   — comma-separated SambaNova API keys
-#   GITHUB_API_KEYS      — comma-separated GitHub tokens
-#   GITHUB_TOKEN         — primary GitHub token
-#   OPENAI_API_KEY       — OpenAI API key (optional)
-#   GROQ_API_KEY         — Groq API key (optional, free)
-#   ANTHROPIC_API_KEY    — Anthropic API key (optional)
-
+# Expose port for HuggingFace Spaces
 EXPOSE 7860
 
-CMD ["uvicorn", "main_v8:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+# Environment
+ENV PORT=7860
+ENV PYTHONPATH=/app
+
+# Start with v9 main
+CMD ["python", "-m", "uvicorn", "main_v9:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

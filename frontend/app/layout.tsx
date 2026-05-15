@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'GOD AGENT OS — Autonomous AI Operating System',
-  description: 'Multi-agent AI OS powered by Gemini, Sambanova & GitHub Models',
+  title: 'GOD AGENT OS v9 — General Autonomous Agent OS | Powered by Pyae Sone',
+  description: 'Space-Role Architecture — General Autonomous Agent OS. 8 Spaces × 5 Roles. Powered by Pyae Sone.',
   icons: { icon: '/favicon.ico' },
 }
 

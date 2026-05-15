@@ -1,20 +1,23 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install",
   "framework": "nextjs",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "https://PYAE1994-autonomous-coding-system.hf.space",
-    "NEXT_PUBLIC_APP_VERSION": "8.0.0",
-    "NEXT_PUBLIC_APP_NAME": "GOD AGENT OS"
-  },
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://pyae1994-autonomous-coding-system.hf.space/api/v1/:path*"
+    },
+    {
+      "source": "/ws/:path*",
+      "destination": "https://pyae1994-autonomous-coding-system.hf.space/ws/:path*"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        { "key": "X-Powered-By", "value": "Pyae Sone" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
       ]
     }
   ]

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Cpu, MemoryStick, HardDrive, Wifi } from 'lucide-react'
-import { useAppStore } from '@/store/useAppStore'
+// import { useAppStore } from '@/store/useAppStore'
 
 const RESOURCE_CONFIGS = [
   { key: 'cpu',     label: 'CPU',     icon: Cpu,          color: '#6366f1' },

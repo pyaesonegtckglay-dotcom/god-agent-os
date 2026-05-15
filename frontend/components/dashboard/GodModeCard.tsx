@@ -2,9 +2,10 @@
 
 import { motion } from 'framer-motion'
 import { useAppStore } from '@/store/useAppStore'
+const useGodMode = () => ({ godModeActive: true })
 
 export default function GodModeCard() {
-  const { godModeActive } = useAppStore()
+  const godModeActive = true // v9 always active
 
   return (
     <div className="relative overflow-hidden rounded-2xl p-5"
