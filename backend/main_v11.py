@@ -1,15 +1,11 @@
 """
-🚀 GOD AGENT OS v11 — 100% Working Autonomous Engineering OS
-God Mode: Plan + Code + Debug + Deploy + Browse + Git + Memory
-Real streaming, real agents, real computer-use events
-
-FIXED BUGS:
-- TaskEngine constructor: only takes ws_manager (not ai_router)
-- init_db: no argument needed
-- task_engine.run() → task_engine.start()
-- ws_manager.emit_task() → ws_manager.emit()
-- connector_manager.initialize() → not needed (sync init)
-- WebSocket: connect(websocket, session_id) vs connect(websocket, room)
+GOD AGENT OS v11 — Fixed & Production Ready
+Bugs fixed:
+- TaskEngine(ws_manager) only — removed ai_router arg
+- init_db() — no arguments
+- task_engine.start() — not run()
+- ws_manager.emit_chat() — not emit_task()
+- ConnectorManager() — sync init, no await needed
 """
 
 import asyncio
@@ -18,26 +14,21 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any, List
+from typing import Dict, List
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# ─── Core Imports ─────────────────────────────────────────────────────────────
 from api.websocket_manager import WebSocketManager
 from core.task_engine import TaskEngine
 from memory.db import init_db
-
-# ─── v11 AI Router ─────────────────────────────────────────────────────────────
 from ai_router.router_v10 import AIRouterV10
-
-# ─── Agent Fleet ──────────────────────────────────────────────────────────────
 from agents.orchestrator_v7 import GodAgentOrchestratorV7
 from agents.chat_agent import ChatAgent
 from agents.planner_agent import PlannerAgent
@@ -56,8 +47,6 @@ from agents.git_agent import GitAgent
 from agents.test_agent import TestAgent
 from agents.vision_agent import VisionAgent
 from connectors.manager import ConnectorManager
-
-# ─── API Routes ───────────────────────────────────────────────────────────────
 from api.routes import tasks, chat, memory, health, connectors, agents as agents_router
 from api.routes import github
 
@@ -71,22 +60,18 @@ structlog.configure(
 )
 log = structlog.get_logger()
 
-# ─── Rate Limiter ─────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
 
-# ─── Global State ─────────────────────────────────────────────────────────────
 ws_manager: WebSocketManager = None
 task_engine: TaskEngine = None
 ai_router: AIRouterV10 = None
 orchestrator: GodAgentOrchestratorV7 = None
 connector_manager: ConnectorManager = None
 
-# ─── Computer-Use Event Stream (Manus-style) ──────────────────────────────────
 computer_use_sessions: Dict[str, List[Dict]] = {}
 
 
 def add_computer_use_step(session_id: str, step_type: str, data: Dict):
-    """Add a Manus-style computer-use step for a session."""
     if session_id not in computer_use_sessions:
         computer_use_sessions[session_id] = []
     computer_use_sessions[session_id].append({
@@ -103,21 +88,17 @@ def add_computer_use_step(session_id: str, step_type: str, data: Dict):
 async def lifespan(app: FastAPI):
     global ws_manager, task_engine, ai_router, orchestrator, connector_manager
 
-    log.info("🚀 God Agent OS v11 starting up...")
+    log.info("GOD AGENT OS v11 starting...")
 
-    # Initialize DB (no arguments needed)
+    # FIX: init_db() takes no arguments
     await init_db()
 
-    # Initialize AI Router
     ai_router = AIRouterV10()
-
-    # WebSocket Manager
     ws_manager = WebSocketManager()
 
-    # Task Engine (only takes ws_manager — NOT ai_router)
+    # FIX: TaskEngine only takes ws_manager
     task_engine = TaskEngine(ws_manager)
 
-    # Agent Fleet
     orchestrator = GodAgentOrchestratorV7(ws_manager, ai_router)
     agents_map = {
         "chat":      ChatAgent(ws_manager, ai_router),
@@ -140,30 +121,28 @@ async def lifespan(app: FastAPI):
     for name, agent in agents_map.items():
         orchestrator.register_agent(name, agent)
 
-    # Connector Manager (sync init — no await needed)
+    # FIX: ConnectorManager is sync — no await initialize()
     connector_manager = ConnectorManager()
 
-    # Attach to app state
     app.state.ws_manager = ws_manager
     app.state.task_engine = task_engine
     app.state.ai_router = ai_router
     app.state.orchestrator = orchestrator
     app.state.connector_manager = connector_manager
 
-    # Start task engine using start() method (not run())
+    # FIX: use start() not run()
     asyncio.create_task(task_engine.start())
 
-    log.info("✅ God Agent OS v11 ready!", agents=len(agents_map))
+    log.info("GOD AGENT OS v11 ready!", agents=len(agents_map))
     yield
 
-    log.info("Shutting down God Agent OS v11...")
+    log.info("Shutting down...")
     await task_engine.stop()
 
 
-# ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="GOD AGENT OS v11",
-    description="Autonomous Engineering OS — Plan, Code, Debug, Deploy, Browse, Git",
+    description="Autonomous Engineering OS",
     version="11.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -181,8 +160,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ─── Include Routes ───────────────────────────────────────────────────────────
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
@@ -192,11 +169,9 @@ app.include_router(agents_router.router, prefix="/api/v1/agents", tags=["agents"
 app.include_router(github.router, prefix="/api/v1/github", tags=["github"])
 
 
-# ─── WebSocket ────────────────────────────────────────────────────────────────
-
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    # ws_manager.connect uses room-based system, use session_id as room
+    # FIX: connect takes (websocket, room) — use chat: prefix
     await ws_manager.connect(websocket, f"chat:{session_id}")
     try:
         while True:
@@ -209,14 +184,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             elif event_type == "message":
                 message = data.get("message", "")
                 task_id = uuid.uuid4().hex[:12]
-                # emit uses room-based broadcast
+                # FIX: use emit_chat() not emit_task()
                 await ws_manager.emit_chat(session_id, "task_start", {
                     "task_id": task_id,
                     "message": message[:100],
                 })
-                asyncio.create_task(
-                    _run_ws_task(message, task_id, session_id)
-                )
+                asyncio.create_task(_run_ws_task(message, task_id, session_id))
 
             elif event_type == "stop":
                 task_id = data.get("task_id", "")
@@ -228,10 +201,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 
 async def _run_ws_task(message: str, task_id: str, session_id: str):
-    """Run a task and stream results via WebSocket."""
     try:
-        result = await orchestrator.run(
-            message=message,
+        result = await orchestrator.orchestrate(
+            user_message=message,
             task_id=task_id,
             session_id=session_id,
         )
@@ -246,30 +218,22 @@ async def _run_ws_task(message: str, task_id: str, session_id: str):
         })
 
 
-# ─── Computer-Use Endpoints (Manus-style) ────────────────────────────────────
-
 @app.get("/api/v1/computer-use/{session_id}")
 async def get_computer_use_steps(session_id: str):
-    """Get Manus-style computer use steps for a session."""
     steps = computer_use_sessions.get(session_id, [])
     return {"session_id": session_id, "steps": steps, "count": len(steps)}
 
 
 @app.websocket("/ws/computer-use/{session_id}")
 async def computer_use_ws(websocket: WebSocket, session_id: str):
-    """Real-time Manus-style computer use event stream."""
     await websocket.accept()
     try:
         last_idx = 0
         while True:
             steps = computer_use_sessions.get(session_id, [])
             if len(steps) > last_idx:
-                new_steps = steps[last_idx:]
-                for step in new_steps:
-                    await websocket.send_json({
-                        "type": "computer_use_step",
-                        "step": step,
-                    })
+                for step in steps[last_idx:]:
+                    await websocket.send_json({"type": "computer_use_step", "step": step})
                 last_idx = len(steps)
             await asyncio.sleep(0.5)
     except WebSocketDisconnect:
@@ -278,7 +242,6 @@ async def computer_use_ws(websocket: WebSocket, session_id: str):
 
 @app.post("/api/v1/orchestrate")
 async def orchestrate_goal(request: Request):
-    """Main orchestration endpoint — God Mode."""
     body = await request.json()
     message = body.get("message", "")
     session_id = body.get("session_id", uuid.uuid4().hex[:12])
@@ -287,7 +250,6 @@ async def orchestrate_goal(request: Request):
         raise HTTPException(status_code=400, detail="Message required")
 
     task_id = uuid.uuid4().hex[:12]
-
     add_computer_use_step(session_id, "thinking", {
         "message": f"Processing: {message[:100]}",
         "task_id": task_id,
@@ -296,14 +258,10 @@ async def orchestrate_goal(request: Request):
     if body.get("stream", False):
         async def stream_gen():
             try:
-                result = await orchestrator.run(
-                    message=message,
-                    task_id=task_id,
-                    session_id=session_id,
+                result = await orchestrator.orchestrate(
+                    user_message=message, task_id=task_id, session_id=session_id,
                 )
-                add_computer_use_step(session_id, "complete", {
-                    "result": result[:200] if result else "",
-                })
+                add_computer_use_step(session_id, "complete", {"result": result[:200] if result else ""})
                 yield f"data: {json.dumps({'type': 'complete', 'result': result, 'task_id': task_id, 'session_id': session_id})}\n\n"
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
@@ -315,30 +273,16 @@ async def orchestrate_goal(request: Request):
         )
 
     try:
-        result = await orchestrator.run(
-            message=message,
-            task_id=task_id,
-            session_id=session_id,
-        )
-        add_computer_use_step(session_id, "complete", {
-            "result": result[:200] if result else "",
-        })
-        return {
-            "task_id": task_id,
-            "session_id": session_id,
-            "result": result,
-            "status": "complete",
-        }
+        result = await orchestrator.orchestrate(user_message=message, task_id=task_id, session_id=session_id)
+        add_computer_use_step(session_id, "complete", {"result": result[:200] if result else ""})
+        return {"task_id": task_id, "session_id": session_id, "result": result, "status": "complete"}
     except Exception as e:
         log.error("Orchestration error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ─── Agent Direct Execution ───────────────────────────────────────────────────
-
 @app.post("/api/v1/agents/{agent_name}/run")
 async def run_agent(agent_name: str, request: Request):
-    """Run a specific agent directly."""
     body = await request.json()
     task = body.get("task", "")
     session_id = body.get("session_id", uuid.uuid4().hex[:12])
@@ -355,23 +299,18 @@ async def run_agent(agent_name: str, request: Request):
             task_id=task_id,
             session_id=session_id,
         )
-        return {
-            "agent": agent_name,
-            "task_id": task_id,
-            "result": result,
-            "status": "complete",
-        }
+        return {"agent": agent_name, "task_id": task_id, "result": result, "status": "complete"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/v1/agents")
 async def list_agents():
-    """List all available agents and their status."""
+    names = ["chat", "planner", "coding", "debug", "memory", "connector",
+             "deploy", "workflow", "sandbox", "ui", "reasoning",
+             "browser", "file", "git", "test", "vision"]
     agents_list = []
-    for name in ["chat", "planner", "coding", "debug", "memory", "connector",
-                 "deploy", "workflow", "sandbox", "ui", "reasoning",
-                 "browser", "file", "git", "test", "vision"]:
+    for name in names:
         agent = orchestrator.get_agent(name)
         agents_list.append({
             "name": name,
@@ -381,37 +320,34 @@ async def list_agents():
     return {"agents": agents_list, "total": len(agents_list)}
 
 
-# ─── Spaces Status ────────────────────────────────────────────────────────────
-
 SPACE_DEFS = [
-    {"id": "god-core",        "name": "God Core Space",       "role": "orchestration",  "agent": "orchestrator", "icon": "🧠"},
-    {"id": "coding",          "name": "Coding Worker",         "role": "code_generation","agent": "coding",       "icon": "⚡"},
-    {"id": "sandbox",         "name": "Sandbox Worker",        "role": "execution",      "agent": "sandbox",      "icon": "🔧"},
-    {"id": "terminal",        "name": "Terminal Worker",       "role": "execution",      "agent": "sandbox",      "icon": "🖥️"},
-    {"id": "filesystem",      "name": "FileSystem Worker",     "role": "files",          "agent": "file",         "icon": "📁"},
-    {"id": "browser",         "name": "Browser Worker",        "role": "research",       "agent": "browser",      "icon": "🌐"},
-    {"id": "vision",          "name": "Vision Worker",         "role": "ui_gen",         "agent": "vision",       "icon": "👁️"},
-    {"id": "ui",              "name": "UI Worker",             "role": "ui",             "agent": "ui",           "icon": "🎨"},
-    {"id": "debug",           "name": "Debug Worker",          "role": "debugging",      "agent": "debug",        "icon": "🐛"},
-    {"id": "test",            "name": "Test Worker",           "role": "testing",        "agent": "test",         "icon": "🧪"},
-    {"id": "verification",    "name": "Verification Worker",   "role": "qa",             "agent": "test",         "icon": "✅"},
-    {"id": "git",             "name": "Git Worker",            "role": "git",            "agent": "git",          "icon": "🔀"},
-    {"id": "deploy",          "name": "Deploy Worker",         "role": "deployment",     "agent": "deploy",       "icon": "🚀"},
-    {"id": "connector",       "name": "Connector Worker",      "role": "integration",    "agent": "connector",    "icon": "🔌"},
-    {"id": "memory",          "name": "Memory Worker",         "role": "memory",         "agent": "memory",       "icon": "💾"},
-    {"id": "knowledge",       "name": "Knowledge Worker",      "role": "knowledge",      "agent": "memory",       "icon": "📚"},
-    {"id": "workflow",        "name": "Workflow Worker",        "role": "automation",     "agent": "workflow",     "icon": "⚙️"},
-    {"id": "eventbus",        "name": "Event Bus",             "role": "events",         "agent": None,           "icon": "📡"},
-    {"id": "model-router",    "name": "Model Router",          "role": "ai_routing",     "agent": None,           "icon": "🤖"},
-    {"id": "observability",   "name": "Observability",         "role": "monitoring",     "agent": None,           "icon": "📊"},
-    {"id": "session-runtime", "name": "Session Runtime",       "role": "sessions",       "agent": None,           "icon": "⏱️"},
-    {"id": "auth-gateway",    "name": "Auth Gateway",          "role": "auth",           "agent": None,           "icon": "🔐"},
+    {"id": "god-core",        "name": "God Core Space",      "role": "orchestration",   "agent": "orchestrator", "icon": "🧠"},
+    {"id": "coding",          "name": "Coding Worker",        "role": "code_generation", "agent": "coding",       "icon": "⚡"},
+    {"id": "sandbox",         "name": "Sandbox Worker",       "role": "execution",       "agent": "sandbox",      "icon": "🔧"},
+    {"id": "terminal",        "name": "Terminal Worker",      "role": "execution",       "agent": "sandbox",      "icon": "🖥️"},
+    {"id": "filesystem",      "name": "FileSystem Worker",    "role": "files",           "agent": "file",         "icon": "📁"},
+    {"id": "browser",         "name": "Browser Worker",       "role": "research",        "agent": "browser",      "icon": "🌐"},
+    {"id": "vision",          "name": "Vision Worker",        "role": "ui_gen",          "agent": "vision",       "icon": "👁️"},
+    {"id": "ui",              "name": "UI Worker",            "role": "ui",              "agent": "ui",           "icon": "🎨"},
+    {"id": "debug",           "name": "Debug Worker",         "role": "debugging",       "agent": "debug",        "icon": "🐛"},
+    {"id": "test",            "name": "Test Worker",          "role": "testing",         "agent": "test",         "icon": "🧪"},
+    {"id": "verification",    "name": "Verification Worker",  "role": "qa",              "agent": "test",         "icon": "✅"},
+    {"id": "git",             "name": "Git Worker",           "role": "git",             "agent": "git",          "icon": "🔀"},
+    {"id": "deploy",          "name": "Deploy Worker",        "role": "deployment",      "agent": "deploy",       "icon": "🚀"},
+    {"id": "connector",       "name": "Connector Worker",     "role": "integration",     "agent": "connector",    "icon": "🔌"},
+    {"id": "memory",          "name": "Memory Worker",        "role": "memory",          "agent": "memory",       "icon": "💾"},
+    {"id": "knowledge",       "name": "Knowledge Worker",     "role": "knowledge",       "agent": "memory",       "icon": "📚"},
+    {"id": "workflow",        "name": "Workflow Worker",       "role": "automation",      "agent": "workflow",     "icon": "⚙️"},
+    {"id": "eventbus",        "name": "Event Bus",            "role": "events",          "agent": None,           "icon": "📡"},
+    {"id": "model-router",    "name": "Model Router",         "role": "ai_routing",      "agent": None,           "icon": "🤖"},
+    {"id": "observability",   "name": "Observability",        "role": "monitoring",      "agent": None,           "icon": "📊"},
+    {"id": "session-runtime", "name": "Session Runtime",      "role": "sessions",        "agent": None,           "icon": "⏱️"},
+    {"id": "auth-gateway",    "name": "Auth Gateway",         "role": "auth",            "agent": None,           "icon": "🔐"},
 ]
 
 
 @app.get("/api/v1/spaces")
 async def get_spaces():
-    """Get real status of all 22 spaces."""
     spaces_status = []
     for space in SPACE_DEFS:
         agent_name = space.get("agent")
@@ -431,8 +367,6 @@ async def get_spaces():
     }
 
 
-# ─── Health & Status ──────────────────────────────────────────────────────────
-
 @app.get("/health")
 @app.get("/api/v1/health")
 async def health_check():
@@ -442,20 +376,10 @@ async def health_check():
         "status": "healthy",
         "version": "11.0.0",
         "timestamp": time.time(),
-        "uptime": "online",
         "agents": 16,
         "spaces": 22,
         "ai_providers": active_providers,
         "mode": "god_mode",
-        "features": [
-            "streaming_chat",
-            "computer_use_events",
-            "16_agents",
-            "22_spaces",
-            "multi_provider_ai",
-            "real_time_websocket",
-            "manus_style_ui",
-        ],
     }
 
 
@@ -471,7 +395,6 @@ async def get_pool_status():
 
 @app.get("/api/v1/system/status")
 async def system_status():
-    """Full system status — all components."""
     ai_stats = ai_router.get_stats() if ai_router else {}
     cs = connector_manager.get_summary() if connector_manager else {"connected": 0, "total": 0}
     return {
@@ -485,15 +408,8 @@ async def system_status():
         "agents": {
             "total": 16,
             "online": 16,
-            "names": ["orchestrator", "chat", "planner", "coding", "debug", "memory",
-                      "connector", "deploy", "workflow", "sandbox", "ui", "reasoning",
-                      "browser", "file", "git", "test", "vision"],
         },
-        "spaces": {
-            "total": 22,
-            "all_in_backend": True,
-            "note": "All 22 spaces run inside this backend — no external HF space calls needed",
-        },
+        "spaces": {"total": 22, "all_in_backend": True},
         "connectors": cs,
         "features": {
             "god_mode": True,
@@ -501,8 +417,6 @@ async def system_status():
             "streaming": True,
             "websocket": True,
             "multi_agent": True,
-            "self_healing": True,
-            "auto_deploy": True,
             "burmese_language": True,
         },
     }
@@ -511,15 +425,12 @@ async def system_status():
 @app.get("/")
 async def root():
     return {
-        "name": "🤖 GOD AGENT OS v11",
+        "name": "GOD AGENT OS v11",
         "version": "11.0.0",
         "status": "operational",
         "mode": "GOD_MODE",
-        "description": "100% Working Autonomous Engineering OS — Plan+Code+Debug+Deploy+Browse",
         "docs": "/api/docs",
         "health": "/health",
-        "websocket": "/ws/{session_id}",
-        "computer_use_ws": "/ws/computer-use/{session_id}",
         "agents": 16,
         "spaces": 22,
     }
