@@ -1,32 +1,43 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Zap, Send, ChevronRight, Activity, Globe, Terminal, 
-  Code2, Eye, Bug, Rocket, MessageSquare, Brain,
-  Cpu, MemoryStick, Wifi, ArrowRight
+import {
+  Plus,
+  Search,
+  Send,
+  Brain,
+  Globe,
+  Terminal,
+  Code2,
+  Eye,
+  Bug,
+  Rocket,
+  MessageSquare,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
-import { createWebSocket } from '@/lib/api'
+import { createWebSocket, getSessions, getSessionHistory, orchestrate } from '@/lib/api'
 
 const SPACES_CONFIG = [
-  { id: 'core',          name: 'Core Space',          icon: '🧠', color: '#7c3aed', desc: 'Planning & Orchestration',    role: 'cognition' },
-  { id: 'browser',       name: 'Browser Space',       icon: '🌐', color: '#2563eb', desc: 'Web Research & Navigation',   role: 'automation' },
-  { id: 'sandbox',       name: 'Sandbox Space',       icon: '💻', color: '#059669', desc: 'Code Execution & Testing',    role: 'execution' },
-  { id: 'coding',        name: 'Coding Space',        icon: '🔧', color: '#d97706', desc: 'Code Generation & Review',    role: 'execution' },
-  { id: 'vision',        name: 'Vision Space',        icon: '👁️', color: '#db2777', desc: 'UI Design & Image Analysis',  role: 'visual_intelligence' },
-  { id: 'debug',         name: 'Debug Space',         icon: '🐛', color: '#dc2626', desc: 'Error Analysis & Self-Heal',  role: 'repair' },
-  { id: 'deploy',        name: 'Deploy Space',        icon: '🚀', color: '#0891b2', desc: 'Cloud Deploy & CI/CD',        role: 'automation' },
-  { id: 'communication', name: 'Comm Space',          icon: '💬', color: '#8b5cf6', desc: 'Messaging & Documentation',   role: 'automation' },
-]
+  { id: 'core',          name: 'Core Space',    icon: '🧠', color: '#7c3aed', desc: 'Planning & orchestration', role: 'cognition' },
+  { id: 'browser',       name: 'Browser Space', icon: '🌐', color: '#2563eb', desc: 'Research & extraction', role: 'automation' },
+  { id: 'sandbox',       name: 'Sandbox Space', icon: '💻', color: '#059669', desc: 'Execution & testing', role: 'execution' },
+  { id: 'coding',        name: 'Coding Space',  icon: '🔧', color: '#d97706', desc: 'Code generation', role: 'execution' },
+  { id: 'vision',        name: 'Vision Space',  icon: '👁️', color: '#db2777', desc: 'UI & image understanding', role: 'visual_intelligence' },
+  { id: 'debug',         name: 'Debug Space',   icon: '🐛', color: '#dc2626', desc: 'Repair & diagnostics', role: 'repair' },
+  { id: 'deploy',        name: 'Deploy Space',  icon: '🚀', color: '#0891b2', desc: 'Deployment workflows', role: 'automation' },
+  { id: 'communication', name: 'Comm Space',    icon: '💬', color: '#8b5cf6', desc: 'Docs & messaging', role: 'automation' },
+] as const
 
-const ROLES_CONFIG = [
-  { id: 'cognition',          name: 'Cognition',          icon: '🧠', desc: 'The Thinker — Plans & Analyzes' },
-  { id: 'automation',         name: 'Automation',         icon: '⚙️', desc: 'The Operator — Executes Workflows' },
-  { id: 'execution',          name: 'Execution',          icon: '⚡', desc: 'The Doer — Writes & Runs Code' },
-  { id: 'repair',             name: 'Repair',             icon: '🔧', desc: 'The Fixer — Heals Errors' },
-  { id: 'visual_intelligence',name: 'Visual Intel',       icon: '👁️', desc: 'The Observer — Sees & Creates UI' },
+const QUICK_ACTIONS = [
+  { text: 'Search latest AI trends', icon: Globe, color: '#2563eb' },
+  { text: 'Write a production FastAPI service', icon: Code2, color: '#d97706' },
+  { text: 'Run a Python hello-world example', icon: Terminal, color: '#059669' },
+  { text: 'Debug a deployment error log', icon: Bug, color: '#dc2626' },
+  { text: 'Generate a modern React dashboard UI', icon: Eye, color: '#db2777' },
+  { text: 'Prepare a deployment plan for Hugging Face and Vercel', icon: Rocket, color: '#0891b2' },
 ]
 
 interface Message {
@@ -38,411 +49,532 @@ interface Message {
   timestamp: number
 }
 
+interface SessionSummary {
+  id: string
+  title: string
+  lastActive: number
+}
+
+const welcomeMessage: Message = {
+  id: 'welcome',
+  role: 'assistant',
+  content:
+    'GOD AGENT OS v9.0.1 is ready.\\n\\nI can route work across Core, Browser, Sandbox, Coding, Vision, Debug, Deploy, and Communication spaces. Start a new request or use any quick action below.',
+  timestamp: Date.now(),
+}
+
+function emitNotification(title: string, description: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(
+    new CustomEvent('god-agent-notification', {
+      detail: {
+        id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        description,
+        timestamp: Date.now(),
+      },
+    }),
+  )
+}
+
+function formatRelativeTime(timestamp?: number) {
+  if (!timestamp) return 'Just now'
+  const diff = Date.now() - timestamp
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
+function toSessionTitle(text?: string) {
+  return (text || 'New chat').replace(/\s+/g, ' ').trim().slice(0, 50) || 'New chat'
+}
+
 export default function DashboardPage() {
-  const { activeSpace, currentRole, activateSpace, deactivateSpace, spaces } = useAppStore()
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: '🧠 **GOD AGENT OS v9** is online!\n\nSpace-Role Architecture active. I can handle ANY digital task:\n\n- 🌐 **Browser** — Web research & data extraction\n- 💻 **Sandbox** — Code execution\n- 🔧 **Coding** — Generate any code\n- 👁️ **Vision** — UI design & image analysis\n- 🐛 **Debug** — Error analysis & self-healing\n- 🚀 **Deploy** — Cloud deployments\n- 💬 **Comm** — Documentation & messaging\n\nWhat do you need?',
-      timestamp: Date.now(),
-    }
-  ])
+  const { activeSpace, currentRole, activateSpace, spaces } = useAppStore()
+
+  const [sessions, setSessions] = useState<SessionSummary[]>([])
+  const [sessionSearch, setSessionSearch] = useState('')
+  const [currentSessionId, setCurrentSessionId] = useState('')
+  const [messages, setMessages] = useState<Message[]>([welcomeMessage])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionId] = useState(() => `session_${Date.now()}`)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
   const [activeSpaceIndicator, setActiveSpaceIndicator] = useState<string | null>(null)
+
   const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  const filteredSessions = useMemo(() => {
+    const q = sessionSearch.trim().toLowerCase()
+    if (!q) return sessions
+    return sessions.filter((session) => session.title.toLowerCase().includes(q))
+  }, [sessionSearch, sessions])
+
+  const refreshSessions = useCallback(async (preferredSessionId?: string) => {
+    try {
+      const data = await getSessions()
+      const next = (data.sessions || []).map((session: any) => ({
+        id: session.id,
+        title: session.title || toSessionTitle(session.metadata?.title || session.id),
+        lastActive: session.last_active || session.created_at || Date.now(),
+      }))
+
+      setSessions(next)
+
+      if (!currentSessionId && next[0]?.id) {
+        setCurrentSessionId(preferredSessionId || next[0].id)
+      }
+    } catch {
+      // Ignore and keep current local state
+    }
+  }, [currentSessionId])
+
+  const startNewChat = useCallback(() => {
+    const sessionId = `session_${Date.now()}`
+    setCurrentSessionId(sessionId)
+    setMessages([welcomeMessage])
+    setInput('')
+    setIsLoading(false)
+    setActiveSpaceIndicator(null)
+    setSessions((prev) => [{ id: sessionId, title: 'New chat', lastActive: Date.now() }, ...prev.filter((item) => item.id !== sessionId)])
+    emitNotification('New chat created', 'A fresh session is ready for a new task.')
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
+
+  const loadSession = useCallback(async (sessionId: string) => {
+    setCurrentSessionId(sessionId)
+    setLoadingHistory(true)
+
+    try {
+      const data = await getSessionHistory(sessionId)
+      const history = (data.history || []).map((item: any, index: number) => ({
+        id: `${item.id || `${sessionId}_${index}`}`,
+        role: (item.metadata?.role || item.key || 'assistant') === 'user' ? 'user' : 'assistant',
+        content: item.content,
+        space: item.metadata?.space,
+        agentRole: item.metadata?.agent_role,
+        timestamp: item.created_at ? item.created_at * 1000 : Date.now(),
+      }))
+
+      setMessages(history.length > 0 ? history : [welcomeMessage])
+    } catch {
+      setMessages([welcomeMessage])
+    } finally {
+      setLoadingHistory(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshSessions()
+  }, [refreshSessions])
+
+  useEffect(() => {
+    if (!currentSessionId) return
+    loadSession(currentSessionId)
+  }, [currentSessionId, loadSession])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, isLoading])
 
   useEffect(() => {
-    connectWS()
-    return () => wsRef.current?.close()
-  }, [sessionId])
+    if (!currentSessionId) return
 
-  function connectWS() {
-    try {
-      const ws = createWebSocket(`/ws/chat/${sessionId}`)
-      wsRef.current = ws
-      setWsStatus('connecting')
+    const connectWS = () => {
+      try {
+        const ws = createWebSocket(`/ws/chat/${currentSessionId}`)
+        wsRef.current = ws
+        setWsStatus('connecting')
 
-      ws.onopen = () => {
-        setWsStatus('connected')
-        ws.send(JSON.stringify({ type: 'ping' }))
-      }
+        ws.onopen = () => {
+          setWsStatus('connected')
+          ws.send(JSON.stringify({ type: 'ping' }))
+        }
 
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data)
-          
-          if (msg.type === 'space_activated') {
-            setActiveSpaceIndicator(msg.space)
-            activateSpace(msg.space as any, msg.role)
-          }
-          
-          if (msg.type === 'chat_response' || msg.type === 'agent_response') {
-            const content = msg.content || msg.message || msg.data?.content || ''
-            if (content) {
-              setMessages(prev => {
-                const last = prev[prev.length - 1]
-                if (last?.role === 'assistant' && last.id.startsWith('stream_')) {
-                  return [...prev.slice(0, -1), { ...last, content }]
-                }
-                return [...prev, {
-                  id: `msg_${Date.now()}`,
-                  role: 'assistant',
-                  content,
-                  space: msg.space,
-                  agentRole: msg.role,
-                  timestamp: Date.now(),
-                }]
-              })
-              setIsLoading(false)
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data)
+
+            if (msg.type === 'space_activated') {
+              setActiveSpaceIndicator(msg.space)
+              activateSpace(msg.space, msg.role)
+              emitNotification('Space activated', `${msg.space} space is handling the current task.`)
             }
-          }
-          
-          if (msg.type === 'kernel_status') {
-            // Kernel is thinking
-          }
-          
-        } catch (e) {}
-      }
 
-      ws.onclose = () => {
+            if (msg.type === 'kernel_status') {
+              setIsLoading(true)
+            }
+
+            if (msg.type === 'chat_response') {
+              const content = msg.content || msg.message || msg.data?.content || ''
+              if (!content) return
+
+              setMessages((prev) => {
+                const last = prev[prev.length - 1]
+                if (last?.role === 'assistant' && last.content === content) return prev
+                return [
+                  ...prev,
+                  {
+                    id: `assistant_${Date.now()}`,
+                    role: 'assistant',
+                    content,
+                    space: msg.space,
+                    agentRole: msg.role,
+                    timestamp: Date.now(),
+                  },
+                ]
+              })
+
+              setIsLoading(false)
+              setActiveSpaceIndicator(msg.space || null)
+              emitNotification('Response ready', 'The agent finished the latest request.')
+              refreshSessions(currentSessionId)
+            }
+          } catch {
+            // Ignore malformed events
+          }
+        }
+
+        ws.onclose = () => {
+          setWsStatus('disconnected')
+          reconnectTimerRef.current = setTimeout(connectWS, 2500)
+        }
+
+        ws.onerror = () => {
+          setWsStatus('disconnected')
+          ws.close()
+        }
+      } catch {
         setWsStatus('disconnected')
-        setTimeout(connectWS, 3000)
       }
+    }
 
-      ws.onerror = () => setWsStatus('disconnected')
-    } catch (e) {}
-  }
+    connectWS()
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      wsRef.current?.close()
+    }
+  }, [currentSessionId, activateSpace, refreshSessions])
 
-  async function sendMessage() {
-    if (!input.trim() || isLoading) return
-    const userMsg = input.trim()
-    setInput('')
-    setIsLoading(true)
+  const upsertLocalSession = useCallback((sessionId: string, title: string) => {
+    setSessions((prev) => {
+      const existing = prev.find((item) => item.id === sessionId)
+      const nextItem = { id: sessionId, title: toSessionTitle(title), lastActive: Date.now() }
+      if (!existing) return [nextItem, ...prev]
+      return [nextItem, ...prev.filter((item) => item.id !== sessionId)]
+    })
+  }, [])
 
-    setMessages(prev => [...prev, {
+  const sendPreparedMessage = useCallback(async (text: string) => {
+    if (!currentSessionId) startNewChat()
+    if (!text.trim() || isLoading) return
+
+    const targetSessionId = currentSessionId || `session_${Date.now()}`
+    if (!currentSessionId) setCurrentSessionId(targetSessionId)
+
+    const userMessage: Message = {
       id: `user_${Date.now()}`,
       role: 'user',
-      content: userMsg,
+      content: text,
       timestamp: Date.now(),
-    }])
+    }
 
-    // Send via WebSocket
+    setMessages((prev) => [...prev.filter((m) => m.id !== 'welcome' || prev.length === 1), userMessage])
+    setInput('')
+    setIsLoading(true)
+    upsertLocalSession(targetSessionId, text)
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'chat_message',
-        content: userMsg,
-        session_id: sessionId,
+        content: text,
+        session_id: targetSessionId,
       }))
-      
-      // Fallback: if no WS response in 15s, try REST
-      setTimeout(async () => {
-        setIsLoading(prev => {
-          if (prev) {
-            // Still loading, try REST
-            fetchREST(userMsg)
-          }
-          return prev
-        })
-      }, 15000)
-    } else {
-      // REST fallback
-      await fetchREST(userMsg)
+      return
     }
-  }
 
-  async function fetchREST(userMsg: string) {
     try {
-      const res = await fetch('/api/v1/kernel/orchestrate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, session_id: sessionId }),
-      }).catch(() => null)
-      
-      if (res?.ok) {
-        const data = await res.json()
-        if (data.result) {
-          setMessages(prev => [...prev, {
+      const data = await orchestrate(text, targetSessionId)
+      if (data.result) {
+        setMessages((prev) => [
+          ...prev,
+          {
             id: `assistant_${Date.now()}`,
             role: 'assistant',
             content: data.result,
             timestamp: Date.now(),
-          }])
-        }
-      } else {
-        // Local fallback
-        setMessages(prev => [...prev, {
-          id: `assistant_${Date.now()}`,
-          role: 'assistant',
-          content: `I'm processing your request: "${userMsg}"\n\n⚠️ Backend connection in progress. The Space-Role system is initializing.`,
-          timestamp: Date.now(),
-        }])
+          },
+        ])
+        emitNotification('Response ready', 'The agent answered through REST fallback.')
       }
-    } catch (e) {
-      setMessages(prev => [...prev, {
-        id: `err_${Date.now()}`,
-        role: 'assistant',
-        content: '⚠️ Connection issue. Please ensure the backend is running.',
-        timestamp: Date.now(),
-      }])
+    } catch (error: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant_error_${Date.now()}`,
+          role: 'assistant',
+          content: `Connection problem: ${error?.message || 'Unable to reach backend.'}`,
+          timestamp: Date.now(),
+        },
+      ])
+      emitNotification('Connection issue', 'Backend fallback request failed.')
+    } finally {
+      setIsLoading(false)
+      refreshSessions(targetSessionId)
     }
-    setIsLoading(false)
-  }
+  }, [currentSessionId, isLoading, refreshSessions, startNewChat, upsertLocalSession])
 
-  function handleKeyDown(e: React.KeyboardEvent) {
+  const handleSend = useCallback(async () => {
+    await sendPreparedMessage(input.trim())
+  }, [input, sendPreparedMessage])
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      handleSend()
     }
   }
 
-  const statusColor = wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444'
-
   return (
-    <div className="flex h-full" style={{ background: '#05060d' }}>
-      
-      {/* Left: Chat Panel */}
-      <div className="flex flex-col flex-1 min-w-0">
-        
-        {/* Space Status Bar */}
-        <div className="h-8 flex items-center gap-2 px-3 border-b overflow-x-auto"
-          style={{ borderColor: '#1a1b2e', background: '#07080f' }}>
-          {SPACES_CONFIG.map(s => {
-            const spaceState = spaces[s.id as keyof typeof spaces]
-            const isActive = spaceState?.active
-            return (
-              <div key={s.id}
-                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] whitespace-nowrap transition-all"
-                style={{
-                  background: isActive ? `${s.color}15` : 'transparent',
-                  color: isActive ? s.color : '#374151',
-                  border: `1px solid ${isActive ? s.color + '30' : 'transparent'}`,
-                }}>
-                <span>{s.icon}</span>
-                <span className="font-medium">{s.id}</span>
-                {isActive && <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: s.color }} />}
-              </div>
-            )
-          })}
-          <div className="ml-auto flex items-center gap-1 text-[10px]">
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: statusColor }} />
-            <span style={{ color: statusColor }}>{wsStatus}</span>
+    <div className="flex h-full" style={{ background: 'var(--void)', color: 'var(--text-primary)' }}>
+      <aside className="w-[280px] border-r flex-shrink-0 flex flex-col" style={{ background: 'var(--panel)', borderColor: 'var(--border)' }}>
+        <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <button
+            onClick={startNewChat}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}
+          >
+            <Plus size={16} />
+            New Chat
+          </button>
+
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}
+          >
+            <Search size={14} style={{ color: 'var(--text-secondary)' }} />
+            <input
+              value={sessionSearch}
+              onChange={(e) => setSessionSearch(e.target.value)}
+              placeholder="Search chats"
+              className="flex-1 bg-transparent outline-none text-sm"
+              style={{ color: 'var(--text-primary)' }}
+            />
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <AnimatePresence initial={false}>
-            {messages.map(msg => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          {filteredSessions.map((session) => {
+            const active = session.id === currentSessionId
+            return (
+              <button
+                key={session.id}
+                onClick={() => loadSession(session.id)}
+                className="w-full text-left p-3 rounded-2xl transition-all"
+                style={{
+                  background: active ? 'rgba(124,58,237,0.12)' : 'transparent',
+                  border: `1px solid ${active ? 'rgba(124,58,237,0.25)' : 'transparent'}`,
+                }}
               >
-                {/* Avatar */}
-                <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-indigo-600' 
-                    : 'bg-gradient-to-br from-violet-600 to-indigo-600'
-                }`}>
-                  {msg.role === 'user' ? '👤' : '🤖'}
+                <div className="text-sm font-semibold truncate" style={{ color: active ? '#8b5cf6' : 'var(--text-primary)' }}>
+                  {session.title}
                 </div>
-                
-                {/* Bubble */}
-                <div className={`max-w-[75%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                  {msg.space && (
-                    <div className="text-[9px] text-slate-600 px-1">
-                      {SPACES_CONFIG.find(s => s.id === msg.space)?.icon} {msg.space?.toUpperCase()} SPACE · {msg.agentRole?.replace('_', ' ')}
-                    </div>
-                  )}
-                  <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-tr-sm'
-                      : 'text-slate-200 rounded-tl-sm'
-                  }`}
-                  style={msg.role === 'assistant' ? { background: '#111827', border: '1px solid #1f2937' } : {}}>
-                    <div className="whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ 
-                        __html: msg.content
-                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                          .replace(/```(\w+)?\n?([\s\S]*?)```/g, '<pre class="bg-black/50 p-2 rounded mt-1 overflow-x-auto text-xs"><code>$2</code></pre>')
-                          .replace(/`(.*?)`/g, '<code class="bg-black/30 px-1 rounded text-xs">$1</code>')
+                <div className="text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  {formatRelativeTime(session.lastActive)}
+                </div>
+              </button>
+            )
+          })}
+
+          {filteredSessions.length === 0 && (
+            <div className="p-4 text-center text-xs rounded-2xl" style={{ background: 'var(--bg-3)', color: 'var(--text-secondary)' }}>
+              No saved chats yet.
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <section className="flex-1 min-w-0 flex flex-col">
+        <div className="h-10 px-4 border-b flex items-center justify-between text-xs" style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ background: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444' }} />
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {wsStatus === 'connected' ? 'Live connection active' : wsStatus === 'connecting' ? 'Connecting...' : 'Offline fallback mode'}
+            </span>
+          </div>
+          <button onClick={() => refreshSessions(currentSessionId)} className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+            <RefreshCw size={12} /> Refresh
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {loadingHistory ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                <Loader2 size={16} className="animate-spin" /> Loading conversation...
+              </div>
+            </div>
+          ) : (
+            <AnimatePresence initial={false}>
+              {messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                >
+                  <div className={`w-9 h-9 rounded-2xl flex items-center justify-center text-sm flex-shrink-0 ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'text-white'}`}
+                    style={msg.role === 'assistant' ? { background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' } : {}}>
+                    {msg.role === 'user' ? '👤' : '🤖'}
+                  </div>
+
+                  <div className={`max-w-[80%] flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    {msg.space && (
+                      <div className="text-[10px] px-1" style={{ color: 'var(--text-secondary)' }}>
+                        {SPACES_CONFIG.find((space) => space.id === msg.space)?.icon} {msg.space.toUpperCase()} · {(msg.agentRole || '').replace('_', ' ')}
+                      </div>
+                    )}
+
+                    <div
+                      className="px-4 py-3 rounded-3xl text-sm leading-relaxed whitespace-pre-wrap"
+                      style={{
+                        background: msg.role === 'user' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'var(--bg-2)',
+                        color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
+                        border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
                       }}
-                    />
+                    >
+                      {msg.content}
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+
           {isLoading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex gap-3 items-start"
-            >
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-sm">🤖</div>
-              <div className="px-3 py-2 rounded-2xl rounded-tl-sm" style={{ background: '#111827', border: '1px solid #1f2937' }}>
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <div className="flex gap-1">
-                    {[0,1,2].map(i => (
-                      <div key={i} className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce"
-                        style={{ animationDelay: `${i * 0.15}s` }} />
-                    ))}
-                  </div>
-                  {activeSpaceIndicator 
-                    ? `${SPACES_CONFIG.find(s => s.id === activeSpaceIndicator)?.icon} ${activeSpaceIndicator} Space processing...`
-                    : 'Agent Kernel analyzing...'
-                  }
+            <div className="flex gap-3 items-start">
+              <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-white" style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
+                🤖
+              </div>
+              <div className="px-4 py-3 rounded-3xl text-sm" style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                  <Loader2 size={14} className="animate-spin" />
+                  {activeSpaceIndicator ? `${activeSpaceIndicator} space is working...` : 'Agent kernel is analyzing your request...'}
                 </div>
               </div>
-            </motion.div>
+            </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Prompts */}
-        <div className="px-3 pb-2 flex gap-2 overflow-x-auto">
-          {[
-            { text: '🌐 Search latest AI trends', space: 'browser' },
-            { text: '🔧 Write a Python API', space: 'coding' },
-            { text: '💻 Run: print("Hello")', space: 'sandbox' },
-            { text: '🚀 Generate Dockerfile', space: 'deploy' },
-            { text: '🐛 Debug my error', space: 'debug' },
-            { text: '👁️ Create React UI', space: 'vision' },
-          ].map((prompt, i) => (
-            <button key={i}
-              onClick={() => { setInput(prompt.text); inputRef.current?.focus() }}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs text-slate-400 hover:text-slate-200 whitespace-nowrap transition-all"
-              style={{ background: '#0d0e1a', border: '1px solid #1e2035' }}>
-              {prompt.text}
-            </button>
-          ))}
-        </div>
-
-        {/* Input */}
-        <div className="px-3 pb-3">
-          <div className="flex gap-2 p-2 rounded-xl" style={{ background: '#0d0e1a', border: '1px solid #1e2035' }}>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask anything — I'll route to the right Space automatically..."
-              rows={1}
-              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-600 resize-none outline-none leading-relaxed"
-              style={{ maxHeight: '120px' }}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!input.trim() || isLoading}
-              className="p-2 rounded-lg transition-all disabled:opacity-40 flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
-              <Send size={14} className="text-white" />
-            </button>
-          </div>
-          <div className="text-[9px] text-slate-700 text-center mt-1">
-            Press Enter to send · Shift+Enter for new line · Powered by Pyae Sone
-          </div>
-        </div>
-      </div>
-
-      {/* Right: Space-Role Panel */}
-      <div className="w-64 border-l flex-shrink-0 flex flex-col overflow-y-auto"
-        style={{ borderColor: '#1a1b2e', background: '#07080f' }}>
-        
-        {/* Spaces Grid */}
-        <div className="p-3 border-b" style={{ borderColor: '#1a1b2e' }}>
-          <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-2">Spaces</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {SPACES_CONFIG.map(s => {
-              const spaceState = spaces[s.id as keyof typeof spaces]
-              const isActive = spaceState?.active
+        <div className="px-4 pb-3">
+          <div className="flex gap-2 overflow-x-auto pb-3">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon
               return (
-                <div key={s.id}
-                  className="p-2 rounded-lg transition-all cursor-pointer"
-                  style={{
-                    background: isActive ? `${s.color}10` : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${isActive ? s.color + '40' : '#1e2035'}`,
-                  }}>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-base">{s.icon}</span>
-                    {isActive && (
-                      <div className="w-1.5 h-1.5 rounded-full animate-pulse"
-                        style={{ background: s.color }} />
-                    )}
-                  </div>
-                  <div className="text-[10px] font-semibold" style={{ color: isActive ? s.color : '#475569' }}>
-                    {s.name.split(' ')[0]}
-                  </div>
-                  <div className="text-[8px] text-slate-600 mt-0.5">{s.desc}</div>
-                  {spaceState?.taskCount > 0 && (
-                    <div className="text-[8px] mt-0.5" style={{ color: s.color }}>
-                      {spaceState.taskCount} tasks
-                    </div>
-                  )}
-                </div>
+                <button
+                  key={action.text}
+                  onClick={() => sendPreparedMessage(action.text)}
+                  className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-all"
+                  style={{ background: `${action.color}14`, color: action.color, border: `1px solid ${action.color}30` }}
+                >
+                  <Icon size={13} />
+                  {action.text}
+                </button>
               )
             })}
           </div>
+
+          <div className="p-3 rounded-3xl" style={{ background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+            <div className="flex gap-3 items-end">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                placeholder="Ask anything. Every request is routed to the right space and stored in history."
+                className="flex-1 bg-transparent resize-none outline-none text-sm leading-relaxed"
+                style={{ color: 'var(--text-primary)', maxHeight: '140px' }}
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                className="w-11 h-11 rounded-2xl flex items-center justify-center disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}
+              >
+                <Send size={16} className="text-white" />
+              </button>
+            </div>
+            <div className="text-[11px] mt-2" style={{ color: 'var(--text-secondary)' }}>
+              Press Enter to send · Shift+Enter for a new line · Chats persist across refreshes.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside className="w-[280px] border-l flex-shrink-0 hidden xl:flex flex-col" style={{ background: 'var(--panel)', borderColor: 'var(--border)' }}>
+        <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-secondary)' }}>
+            Space router
+          </div>
+          <div className="mt-2 text-sm font-semibold">8 Spaces · 5 Roles</div>
+          <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+            Current role: {currentRole.replace('_', ' ')}
+          </div>
         </div>
 
-        {/* Roles */}
-        <div className="p-3 border-b" style={{ borderColor: '#1a1b2e' }}>
-          <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-2">Roles</div>
-          <div className="space-y-1">
-            {ROLES_CONFIG.map(r => (
-              <div key={r.id}
-                className="flex items-center gap-2 p-1.5 rounded-lg transition-all"
+        <div className="p-4 grid grid-cols-2 gap-2">
+          {SPACES_CONFIG.map((space) => {
+            const state = spaces[space.id]
+            const isActive = activeSpace === space.id || state?.active
+            return (
+              <div
+                key={space.id}
+                className="p-3 rounded-2xl"
                 style={{
-                  background: currentRole === r.id ? 'rgba(139,92,246,0.1)' : 'transparent',
-                  border: `1px solid ${currentRole === r.id ? 'rgba(139,92,246,0.3)' : 'transparent'}`,
-                }}>
-                <span className="text-sm">{r.icon}</span>
-                <div>
-                  <div className="text-[10px] font-semibold" style={{ color: currentRole === r.id ? '#a78bfa' : '#475569' }}>
-                    {r.name}
-                  </div>
-                  <div className="text-[8px] text-slate-600">{r.desc}</div>
+                  background: isActive ? `${space.color}12` : 'var(--bg-3)',
+                  border: `1px solid ${isActive ? `${space.color}40` : 'var(--border)'}`,
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-lg">{space.icon}</span>
+                  {isActive && <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: space.color }} />}
+                </div>
+                <div className="text-xs font-semibold" style={{ color: isActive ? space.color : 'var(--text-primary)' }}>
+                  {space.name}
+                </div>
+                <div className="text-[10px] mt-1 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {space.desc}
                 </div>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
 
-        {/* System Status */}
-        <div className="p-3">
-          <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-2">System</div>
-          <div className="space-y-1.5">
-            {[
-              { label: 'Agent Kernel', status: 'operational', color: '#22c55e' },
-              { label: 'AI Router', status: 'active', color: '#22c55e' },
-              { label: 'Memory', status: 'ready', color: '#22c55e' },
-              { label: 'WebSocket', status: wsStatus, color: statusColor },
-            ].map(item => (
-              <div key={item.label} className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-500">{item.label}</span>
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: item.color }} />
-                  <span className="text-[9px]" style={{ color: item.color }}>{item.status}</span>
-                </div>
-              </div>
-            ))}
+        <div className="px-4 pb-4 mt-auto">
+          <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+              <Brain size={16} className="text-violet-500" />
+              Manus-like essentials
+            </div>
+            <ul className="space-y-2 text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              <li>• Persistent chat history with session switching</li>
+              <li>• Real backend-triggered quick actions</li>
+              <li>• Live space activation feedback</li>
+              <li>• Notification center and theme persistence</li>
+            </ul>
           </div>
         </div>
-      </div>
+      </aside>
     </div>
   )
 }

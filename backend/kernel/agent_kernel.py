@@ -10,6 +10,8 @@ import uuid
 from typing import Any, Dict, List, Optional
 import structlog
 
+from memory.db import save_memory, upsert_session
+
 log = structlog.get_logger()
 
 KERNEL_SYSTEM_PROMPT = """You are GOD AGENT OS v9 — a General Autonomous Agent Operating System.
@@ -242,6 +244,22 @@ class AgentKernel:
             "space": primary_space,
             "role": role,
         })
+
+        try:
+            await upsert_session(
+                session_id=session_id,
+                title=user_message[:80],
+                metadata={"active_space": primary_space, "current_role": role},
+            )
+            await save_memory(
+                content=user_message,
+                memory_type="conversation",
+                session_id=session_id,
+                key="user",
+                metadata={"role": "user", "space": primary_space, "agent_role": role},
+            )
+        except Exception as persist_error:
+            log.warning(f"Session persistence warning: {persist_error}")
         
         # Broadcast space activation
         if self.ws:
@@ -300,6 +318,22 @@ class AgentKernel:
                 "space": primary_space,
                 "role": role,
             })
+
+            try:
+                await save_memory(
+                    content=final_result,
+                    memory_type="conversation",
+                    session_id=session_id,
+                    key="assistant",
+                    metadata={"role": "assistant", "space": primary_space, "agent_role": role},
+                )
+                await upsert_session(
+                    session_id=session_id,
+                    title=user_message[:80],
+                    metadata={"active_space": primary_space, "current_role": role},
+                )
+            except Exception as persist_error:
+                log.warning(f"Assistant persistence warning: {persist_error}")
             
             # Track task
             self._task_history.append({
@@ -312,11 +346,22 @@ class AgentKernel:
                 "timestamp": time.time(),
             })
             
+            if self.ws:
+                await self.ws.broadcast_to_room(f"chat:{session_id}", {
+                    "type": "chat_response",
+                    "task_id": task_id,
+                    "content": final_result,
+                    "space": primary_space,
+                    "role": role,
+                    "timestamp": time.time(),
+                })
+
             return final_result
             
         except Exception as e:
             log.error(f"Orchestration error: {e}")
             # Switch to Repair role
+            error_message = f"⚠️ Error in {primary_space} Space: {str(e)}\n\nDebug Space activated. Please try again."
             if self.ws:
                 await self.ws.broadcast_to_room(f"chat:{session_id}", {
                     "type": "space_activated",
@@ -324,7 +369,15 @@ class AgentKernel:
                     "role": "repair",
                     "message": "🔧 Switching to Repair role...",
                 })
-            return f"⚠️ Error in {primary_space} Space: {str(e)}\n\nDebug Space activated. Please try again."
+                await self.ws.broadcast_to_room(f"chat:{session_id}", {
+                    "type": "chat_response",
+                    "task_id": task_id,
+                    "content": error_message,
+                    "space": "debug",
+                    "role": "repair",
+                    "timestamp": time.time(),
+                })
+            return error_message
     
     def get_agent(self, name: str):
         """Backward compatibility - get space by name."""

@@ -1,18 +1,28 @@
 const HF_SPACE = 'https://pyae1994-autonomous-coding-system.hf.space'
 const HF_SPACE_WS = 'wss://pyae1994-autonomous-coding-system.hf.space'
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || HF_SPACE
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || HF_SPACE_WS
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || HF_SPACE).replace(/\/$/, '')
+const WS_BASE = (process.env.NEXT_PUBLIC_WS_URL || HF_SPACE_WS).replace(/\/$/, '')
 
 export const API_URL = API_BASE
 export const WS_URL = WS_BASE
 
 export async function fetchAPI(path: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
     ...options,
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `API error: ${res.status}`)
+  }
+
   return res.json()
+}
+
+export function createWebSocket(path: string): WebSocket {
+  return new WebSocket(`${WS_BASE}${path}`)
 }
 
 export async function getKernelStatus() {
@@ -41,6 +51,17 @@ export async function getConnectors() {
   return fetchAPI('/api/v1/connectors')
 }
 
+export async function setConnectorToken(connectorId: string, token: string) {
+  return fetchAPI('/api/v1/connectors/set-token', {
+    method: 'POST',
+    body: JSON.stringify({ connector_id: connectorId, token }),
+  })
+}
+
+export async function getConnectorSummary() {
+  return fetchAPI('/api/v1/connectors/summary')
+}
+
 export async function getHealth() {
   return fetchAPI('/api/v1/health')
 }
@@ -53,6 +74,10 @@ export async function getMemory() {
   return fetchAPI('/api/v1/memory/')
 }
 
-export function createWebSocket(path: string): WebSocket {
-  return new WebSocket(`${WS_BASE}${path}`)
+export async function getSessions() {
+  return fetchAPI('/api/v1/memory/sessions')
+}
+
+export async function getSessionHistory(sessionId: string) {
+  return fetchAPI(`/api/v1/memory/history/${sessionId}`)
 }

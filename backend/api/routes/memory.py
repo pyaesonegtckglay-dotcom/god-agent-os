@@ -1,11 +1,18 @@
 """
-Memory API Routes — Persistent agent memory
+Memory API Routes — Persistent agent memory and chat sessions
 """
 
 import time
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from core.models import MemorySaveRequest, MemorySearchRequest
-from memory.db import save_memory, search_memory, get_project_memory, get_history
+from memory.db import (
+    save_memory,
+    search_memory,
+    get_project_memory,
+    get_history,
+    list_sessions,
+    get_session,
+)
 
 router = APIRouter()
 
@@ -44,7 +51,19 @@ async def project_memory(
     return {"project_id": project_id, "memories": results, "total": len(results)}
 
 
+@router.get("/sessions", summary="List chat sessions")
+async def sessions(limit: int = Query(default=100, le=500)):
+    results = await list_sessions(limit=limit)
+    return {"sessions": results, "total": len(results)}
+
+
+@router.get("/sessions/{session_id}", summary="Get session metadata")
+async def session_detail(session_id: str):
+    session = await get_session(session_id)
+    return {"session": session}
+
+
 @router.get("/history/{session_id}", summary="Get conversation history")
-async def history(session_id: str, limit: int = Query(default=50, le=200)):
+async def history(session_id: str, limit: int = Query(default=100, le=500)):
     results = await get_history(session_id, limit=limit)
     return {"session_id": session_id, "history": results, "total": len(results)}

@@ -6,13 +6,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ─── CSS Variables ───────────────────────────────────────────────────────── */
-:root {
+:root,
+html[data-theme='dark'] {
   --void: #05060d;
   --surface-1: #0a0c16;
   --surface-2: #0e1121;
   --surface-3: #131729;
   --surface-4: #191e32;
   --surface-5: #1f263b;
+  --bg-1: #07080f;
+  --bg-2: #0a0b14;
+  --bg-3: #0d0e1a;
+  --bg-4: #111827;
+  --panel: #07080f;
+  --panel-soft: #0d0e1a;
   --border: rgba(255,255,255,0.06);
   --border-hover: rgba(255,255,255,0.12);
   --text-primary: #e8eaf0;
@@ -30,6 +37,36 @@
   --red: #ef4444;
 }
 
+html[data-theme='light'] {
+  --void: #f5f7fb;
+  --surface-1: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef2ff;
+  --surface-4: #e2e8f0;
+  --surface-5: #cbd5e1;
+  --bg-1: #f8fafc;
+  --bg-2: #ffffff;
+  --bg-3: #f1f5f9;
+  --bg-4: #e2e8f0;
+  --panel: #ffffff;
+  --panel-soft: #f8fafc;
+  --border: rgba(15,23,42,0.08);
+  --border-hover: rgba(15,23,42,0.14);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --purple: #7c3aed;
+  --purple-bright: #8b5cf6;
+  --purple-glow: rgba(124,58,237,0.16);
+  --blue: #2563eb;
+  --blue-bright: #3b82f6;
+  --cyan: #0891b2;
+  --green: #16a34a;
+  --amber: #d97706;
+  --pink: #db2777;
+  --red: #dc2626;
+}
+
 /* ─── Base Reset ──────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -41,6 +78,7 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   overflow: hidden;
   height: 100vh;
+  transition: background 0.2s ease, color 0.2s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
