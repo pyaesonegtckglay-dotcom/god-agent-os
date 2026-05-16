@@ -1,5 +1,5 @@
 """
-Health + Status Routes — God Mode+ v3.0
+Health + Status Routes — GOD AGENT OS v11
 """
 
 import time
@@ -12,35 +12,33 @@ router = APIRouter()
 
 @router.get("/health", summary="Health check")
 async def health(request: Request):
-    ws = request.app.state.ws_manager
-    engine = request.app.state.task_engine
+    ws = getattr(request.app.state, "ws_manager", None)
+    engine = getattr(request.app.state, "task_engine", None)
     orchestrator = getattr(request.app.state, "orchestrator", None)
     ai_router = getattr(request.app.state, "ai_router", None)
     connector_manager = getattr(request.app.state, "connector_manager", None)
 
-    stats = ws.get_stats()
-    cs = connector_manager.get_summary() if connector_manager else {}
+    ws_stats = ws.get_stats() if ws else {"total_connections": 0, "rooms": {}}
+    cs = connector_manager.get_summary() if connector_manager else {"connected": 0, "total": 0}
     ai_stats = ai_router.get_stats() if ai_router else {}
 
-    kernel = getattr(request.app.state, "kernel", None)
-    kernel_status = kernel.get_status() if kernel else {}
-    
+    orch_status = orchestrator.get_status() if orchestrator else {"agents": [], "total_agents": 0}
+
     return {
         "status": "healthy",
-        "name": "GOD AGENT OS v9 — General Autonomous Agent OS",
-        "version": "9.0.0",
+        "name": "GOD AGENT OS v11 — Autonomous Engineering OS",
+        "version": "11.0.0",
         "powered_by": "Pyae Sone",
-        "architecture": "Space-Role Paradigm",
-        "spaces": kernel_status.get("spaces", []),
+        "architecture": "Multi-Agent Orchestrator + Worker Spaces",
         "timestamp": time.time(),
         "platform": {
-            "mode": "god_mode_plus",
-            "agents": orchestrator.get_status()["agents"] if orchestrator else [],
-            "agent_count": orchestrator.get_status()["total_agents"] if orchestrator else 0,
+            "mode": "god_mode",
+            "agents": orch_status.get("agents", []),
+            "agent_count": orch_status.get("total_agents", 0),
         },
         "ai_router": {
-            "providers": {k: v["available"] for k, v in ai_stats.items()},
-            "ai_ready": any(v["available"] for v in ai_stats.values()),
+            "providers": {k: v.get("available", False) for k, v in ai_stats.items()},
+            "ai_ready": any(v.get("available", False) for v in ai_stats.values()),
         },
         "connectors": {
             "connected": cs.get("connected", 0),
@@ -48,12 +46,12 @@ async def health(request: Request):
             "ai_ready": cs.get("ai_ready", False),
         },
         "task_engine": {
-            "queue_size": engine._queue.qsize(),
-            "active_tasks": len(engine._active),
+            "queue_size": engine._queue.qsize() if engine else 0,
+            "active_tasks": len(engine._active) if engine else 0,
         },
         "websocket": {
-            "connections": stats["total_connections"],
-            "rooms": list(stats["rooms"].keys()),
+            "connections": ws_stats.get("total_connections", 0),
+            "rooms": list(ws_stats.get("rooms", {}).keys()),
         },
         "phases": [
             "Phase 1: God Agent Orchestrator ✅",
@@ -64,8 +62,8 @@ async def health(request: Request):
             "Phase 6: Real-time Streaming ✅",
             "Phase 7: Workflow Factor OS ✅",
             "Phase 8: Modern UI Rebuild ✅",
-            "Phase 9: Multi-Model AI Router ✅",
-            "Phase 10-12: Observability + Security + God Mode+ ✅",
+            "Phase 9: Multi-Model AI Router v10 ✅",
+            "Phase 10: v11 Production Hardening ✅",
         ],
     }
 
