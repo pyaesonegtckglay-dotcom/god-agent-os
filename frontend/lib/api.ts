@@ -81,3 +81,52 @@ export async function getSessions() {
 export async function getSessionHistory(sessionId: string) {
   return fetchAPI(`/api/v1/memory/history/${sessionId}`)
 }
+
+// ── N8N API ───────────────────────────────────────────────────────────────────
+export async function n8nStatus() {
+  return fetchAPI('/api/v1/n8n/status')
+}
+
+export async function n8nGetWorkflows(limit = 50) {
+  return fetchAPI(`/api/v1/n8n/workflows?limit=${limit}`)
+}
+
+export async function n8nGetExecutions(workflowId?: string, limit = 20) {
+  const q = workflowId ? `&workflow_id=${workflowId}` : ''
+  return fetchAPI(`/api/v1/n8n/executions?limit=${limit}${q}`)
+}
+
+export async function n8nGetStats() {
+  return fetchAPI('/api/v1/n8n/stats')
+}
+
+export async function n8nExecuteWorkflow(workflowId: string) {
+  return fetchAPI(`/api/v1/n8n/workflows/${workflowId}/execute`, { method: 'POST' })
+}
+
+export async function n8nToggleWorkflow(workflowId: string, active: boolean) {
+  return fetchAPI(`/api/v1/n8n/workflows/${workflowId}/activate`, {
+    method: 'PATCH',
+    body: JSON.stringify({ active }),
+  })
+}
+
+export async function n8nSetConfig(url: string, apiKey: string) {
+  return fetchAPI('/api/v1/n8n/config', {
+    method: 'POST',
+    body: JSON.stringify({ url, api_key: apiKey }),
+  })
+}
+
+export async function n8nGetConfig() {
+  return fetchAPI('/api/v1/n8n/config')
+}
+
+// ── Analytics (from health + memory) ─────────────────────────────────────────
+export async function getAnalytics() {
+  return fetchAPI('/api/v1/metrics')
+}
+
+export async function getMemoryStats() {
+  return fetchAPI('/api/v1/memory/stats').catch(() => null)
+}
