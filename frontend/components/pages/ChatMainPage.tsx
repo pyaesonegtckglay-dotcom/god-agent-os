@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, MessageSquare, Zap, Send, Square, Code2, Globe,
   Folder, GitBranch, FlaskConical, Eye, Rocket, Bot,
-  Search, Trash2, ChevronRight, Sparkles, Terminal,
-  Brain, Settings2, RefreshCw
+  Search, Trash2, Sparkles, Terminal,
+  Brain, RefreshCw, Copy, Check, ChevronRight, AlertCircle, Wifi, WifiOff
 } from 'lucide-react'
-import { fetchAPI } from '@/lib/api'
+import { streamOrchestrate, getHealth } from '@/lib/api'
+import { useAppStore } from '@/store/useAppStore'
+import ReactMarkdown from 'react-markdown'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,37 +31,31 @@ interface ChatSession {
   messages: Message[]
   createdAt: number
   updatedAt: number
-  preview: string
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-  { icon: Code2,        label: 'Build REST API',        prompt: 'Build a production-ready REST API with FastAPI, SQLite, JWT auth, and full CRUD endpoints' },
-  { icon: Globe,        label: 'Research Web',           prompt: 'Research the latest AI agent frameworks and compare Manus, Genspark, and Devin capabilities' },
-  { icon: Folder,       label: 'Scaffold Project',       prompt: 'Create a full-stack project: Next.js 14 frontend + FastAPI backend + Docker + CI/CD pipeline' },
-  { icon: GitBranch,    label: 'Git Operations',         prompt: 'Create a new GitHub repository with README, .gitignore, and initial commit' },
-  { icon: FlaskConical, label: 'Generate Tests',         prompt: 'Generate comprehensive pytest tests with fixtures, mocks, and edge cases for a FastAPI app' },
-  { icon: Eye,          label: 'Generate UI',            prompt: 'Create a stunning dark-themed admin dashboard with React, Tailwind, and glassmorphism' },
-  { icon: Rocket,       label: 'Deploy to Vercel',       prompt: 'Generate Vercel deployment config with environment variables, edge functions, and CI/CD' },
-  { icon: Bot,          label: 'Multi-Agent Task',       prompt: 'Build a full autonomous AI agent system: plan, code, test, and deploy a Telegram AI bot' },
+  { icon: Code2,        label: 'Build REST API',        labelMy: 'REST API တည်ဆောက်',  prompt: 'Build a production-ready REST API with FastAPI, SQLite, JWT auth, and full CRUD endpoints' },
+  { icon: Globe,        label: 'Web Research',           labelMy: 'Web သုတေသန',          prompt: 'Research the latest AI agent frameworks. Compare Manus, Genspark, and Devin capabilities with pros/cons' },
+  { icon: Folder,       label: 'Scaffold Project',       labelMy: 'Project ဖွဲ့ဆောက်',   prompt: 'Create a full-stack project: Next.js 14 frontend + FastAPI backend + Docker + CI/CD pipeline' },
+  { icon: GitBranch,    label: 'Git Operations',         labelMy: 'Git လုပ်ဆောင်',         prompt: 'Create a GitHub repository with README, .gitignore, branch protection, and initial commit' },
+  { icon: FlaskConical, label: 'Generate Tests',         labelMy: 'Test ဖန်တီး',           prompt: 'Generate comprehensive pytest tests with fixtures, mocks, and edge cases for a FastAPI app' },
+  { icon: Eye,          label: 'Generate UI',            labelMy: 'UI ဖန်တီး',             prompt: 'Create a stunning dark-themed admin dashboard with React, Tailwind CSS, and glassmorphism design' },
+  { icon: Rocket,       label: 'Deploy to Vercel',       labelMy: 'Vercel တင်',            prompt: 'Generate Vercel deployment config with environment variables, edge functions, and CI/CD pipeline' },
+  { icon: Bot,          label: 'Multi-Agent Task',       labelMy: 'Multi-Agent',           prompt: 'Build a full autonomous AI agent system: plan, code, test, and deploy a Telegram AI bot' },
 ]
 
-const STORAGE_KEY = 'god_agent_chat_sessions'
-const ACTIVE_KEY = 'god_agent_active_session'
+const STORAGE_KEY = 'god_agent_v11_sessions'
+const ACTIVE_KEY = 'god_agent_v11_active'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function genId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
-}
+function genId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36) }
 
 function loadSessions(): ChatSession[] {
   if (typeof window === 'undefined') return []
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] }
 }
 
 function saveSessions(sessions: ChatSession[]) {
@@ -77,533 +73,545 @@ function saveActiveId(id: string) {
   try { localStorage.setItem(ACTIVE_KEY, id) } catch {}
 }
 
-function truncate(str: string, n: number) {
-  return str.length > n ? str.slice(0, n - 3) + '...' : str
-}
+// ─── Message Bubble ───────────────────────────────────────────────────────────
 
-function formatTime(ts: number) {
-  const d = new Date(ts)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return d.toLocaleDateString()
+function MessageBubble({ msg }: { msg: Message }) {
+  const [copied, setCopied] = useState(false)
+
+  const copyContent = () => {
+    navigator.clipboard.writeText(msg.content).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  const isUser = msg.role === 'user'
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end mb-4 animate-fade-in">
+        <div className="max-w-[75%]">
+          <div className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm"
+            style={{
+              background: 'linear-gradient(135deg, var(--accent), #4f46e5)',
+              color: 'white',
+            }}>
+            {msg.content}
+          </div>
+          <div className="text-[10px] mt-1 text-right" style={{ color: 'var(--text-muted)' }}>
+            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex gap-3 mb-4 animate-fade-in group">
+      {/* Avatar */}
+      <div className="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center mt-0.5"
+        style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
+        <Zap size={14} style={{ color: 'var(--accent-bright)' }} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-semibold" style={{ color: 'var(--accent-bright)' }}>God Agent</span>
+          {msg.agent && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+              style={{ background: 'rgba(124,58,237,0.1)', color: '#a78bfa' }}>
+              {msg.agent}
+            </span>
+          )}
+          {msg.error && (
+            <span className="badge badge-red text-[10px]">
+              <AlertCircle size={9} /> Error
+            </span>
+          )}
+          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-2xl rounded-tl-sm text-sm card">
+          {msg.streaming && !msg.content ? (
+            <div className="flex gap-1.5 items-center" style={{ color: 'var(--text-muted)' }}>
+              <div className="flex gap-1">
+                {[0,1,2].map(i => (
+                  <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce"
+                    style={{ background: 'var(--accent)', animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
+              <span className="text-xs">Thinking...</span>
+            </div>
+          ) : (
+            <div className={`prose-god ${msg.streaming ? 'streaming-cursor' : ''}`}>
+              <ReactMarkdown
+                components={{
+                  code: (({ className, children, ...props }: { className?: string; children?: React.ReactNode; [key: string]: unknown }) => {
+                    const isBlock = className?.includes('language-')
+                    return isBlock ? (
+                      <pre className="code-block">
+                        <code>{children}</code>
+                      </pre>
+                    ) : (
+                      <code className="bg-purple-900/30 text-purple-200 px-1.5 py-0.5 rounded text-xs">{children}</code>
+                    )
+                  }) as React.ComponentType<{ className?: string; children?: React.ReactNode }>
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+
+        {/* Copy button */}
+        {!msg.streaming && msg.content && (
+          <button onClick={copyContent}
+            className="mt-1 flex items-center gap-1 text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/5"
+            style={{ color: 'var(--text-muted)' }}>
+            {copied ? <><Check size={10} /> Copied</> : <><Copy size={10} /> Copy</>}
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ChatMainPage() {
+  const { locale, addComputerUseStep, setComputerUseOpen } = useAppStore()
+
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [streamingId, setStreamingId] = useState<string | null>(null)
-  const [sidebarSearch, setSidebarSearch] = useState('')
-  const [mounted, setMounted] = useState(false)
-  const [mode, setMode] = useState<'chat' | 'agent'>('chat')
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
 
+  const abortRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const sessionId = useRef(genId())
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load from localStorage on mount
+  // Load sessions
   useEffect(() => {
     const saved = loadSessions()
-    const savedActiveId = loadActiveId()
     setSessions(saved)
-    if (savedActiveId && saved.find(s => s.id === savedActiveId)) {
-      setActiveId(savedActiveId)
+    const savedId = loadActiveId()
+    if (savedId && saved.find(s => s.id === savedId)) {
+      setActiveId(savedId)
     } else if (saved.length > 0) {
       setActiveId(saved[0].id)
     }
-    setMounted(true)
   }, [])
 
-  // Save sessions whenever they change
+  // Check backend
   useEffect(() => {
-    if (mounted) saveSessions(sessions)
-  }, [sessions, mounted])
+    getHealth()
+      .then(() => setBackendStatus('online'))
+      .catch(() => setBackendStatus('offline'))
+  }, [])
 
-  useEffect(() => {
-    if (activeId) saveActiveId(activeId)
-  }, [activeId])
-
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [sessions, activeId])
 
-  const activeSession = sessions.find(s => s.id === activeId) || null
-  const messages = activeSession?.messages || []
+  const activeSession = sessions.find(s => s.id === activeId)
 
-  // ─── Session Management ────────────────────────────────────────────────────
-
-  const createNewChat = useCallback(() => {
+  const createSession = useCallback(() => {
     const id = genId()
-    const newSession: ChatSession = {
+    const session: ChatSession = {
       id,
-      title: 'New Chat',
+      title: locale === 'my' ? 'စကားပြောသစ်' : 'New Chat',
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      preview: '',
     }
-    setSessions(prev => [newSession, ...prev])
-    setActiveId(id)
-    setInput('')
-    inputRef.current?.focus()
-  }, [])
-
-  const deleteSession = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
     setSessions(prev => {
-      const next = prev.filter(s => s.id !== id)
-      if (activeId === id) {
-        setActiveId(next.length > 0 ? next[0].id : null)
-      }
+      const next = [session, ...prev]
+      saveSessions(next)
       return next
     })
+    setActiveId(id)
+    saveActiveId(id)
+  }, [locale])
+
+  const deleteSession = useCallback((id: string) => {
+    setSessions(prev => {
+      const next = prev.filter(s => s.id !== id)
+      saveSessions(next)
+      return next
+    })
+    if (activeId === id) {
+      setActiveId(null)
+    }
   }, [activeId])
 
   const updateSession = useCallback((id: string, updates: Partial<ChatSession>) => {
-    setSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates, updatedAt: Date.now() } : s))
+    setSessions(prev => {
+      const next = prev.map(s => s.id === id ? { ...s, ...updates, updatedAt: Date.now() } : s)
+      saveSessions(next)
+      return next
+    })
   }, [])
 
-  const addMessage = useCallback((sessionId_: string, msg: Omit<Message, 'id' | 'timestamp'>): string => {
-    const id = genId()
-    const fullMsg: Message = { ...msg, id, timestamp: Date.now() }
-    setSessions(prev => prev.map(s => {
-      if (s.id !== sessionId_) return s
-      const msgs = [...s.messages, fullMsg]
-      const userMsgs = msgs.filter(m => m.role === 'user')
-      const title = userMsgs.length > 0
-        ? truncate(userMsgs[0].content, 40)
-        : s.title
-      const preview = truncate(fullMsg.content || '', 60)
-      return { ...s, messages: msgs, title, preview, updatedAt: Date.now() }
-    }))
-    return id
-  }, [])
+  const sendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || isStreaming) return
 
-  const updateMessage = useCallback((sessionId_: string, msgId: string, updates: Partial<Message>) => {
-    setSessions(prev => prev.map(s => {
-      if (s.id !== sessionId_) return s
-      return {
-        ...s,
-        messages: s.messages.map(m => m.id === msgId ? { ...m, ...updates } : m),
+    let sessionId = activeId
+    if (!sessionId) {
+      const id = genId()
+      const session: ChatSession = {
+        id,
+        title: content.slice(0, 30),
+        messages: [],
+        createdAt: Date.now(),
         updatedAt: Date.now(),
       }
-    }))
-  }, [])
-
-  // ─── Send Message ──────────────────────────────────────────────────────────
-
-  const handleSubmit = useCallback(async (text?: string) => {
-    const content = (text || input).trim()
-    if (!content || isStreaming) return
-
-    let sid = activeId
-    if (!sid) {
-      const id = genId()
-      const newSession: ChatSession = {
-        id, title: truncate(content, 40),
-        messages: [], createdAt: Date.now(), updatedAt: Date.now(), preview: '',
-      }
-      setSessions(prev => [newSession, ...prev])
+      setSessions(prev => {
+        const next = [session, ...prev]
+        saveSessions(next)
+        return next
+      })
       setActiveId(id)
-      sid = id
+      saveActiveId(id)
+      sessionId = id
     }
+
+    // User message
+    const userMsg: Message = {
+      id: genId(),
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+    }
+
+    // Assistant placeholder
+    const assistantMsg: Message = {
+      id: genId(),
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      streaming: true,
+    }
+
+    const assistantId = assistantMsg.id
+
+    updateSession(sessionId, {
+      messages: [...(sessions.find(s => s.id === sessionId)?.messages || []), userMsg, assistantMsg],
+      title: sessions.find(s => s.id === sessionId)?.messages.length === 0
+        ? content.slice(0, 35)
+        : sessions.find(s => s.id === sessionId)?.title || content.slice(0, 35),
+    })
 
     setInput('')
-    inputRef.current?.style.setProperty('height', 'auto')
-
-    addMessage(sid, { role: 'user', content })
-
-    const assistantMsgId = addMessage(sid, {
-      role: 'assistant', content: '', streaming: true, agent: 'thinking',
-    })
-    setStreamingId(assistantMsgId)
     setIsStreaming(true)
+    setComputerUseOpen(true)
 
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-      
-      if (mode === 'agent') {
-        // Agent mode — create task
-        const res = await fetch(`${apiUrl}/api/v1/tasks/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ goal: content, session_id: sessionId.current }),
+    // Add initial computer use step
+    addComputerUseStep({
+      type: 'thinking',
+      title: locale === 'my' ? `မေးခွန်းကို ခွဲခြမ်းနေသည်...` : `Analyzing request...`,
+      detail: content.slice(0, 80),
+      status: 'running',
+    })
+
+    const ctrl = await streamOrchestrate(
+      content,
+      sessionId,
+      // onChunk
+      (chunk: string) => {
+        setSessions(prev => prev.map(s => {
+          if (s.id !== sessionId) return s
+          return {
+            ...s,
+            messages: s.messages.map(m =>
+              m.id === assistantId ? { ...m, content: m.content + chunk, streaming: true } : m
+            ),
+          }
+        }))
+      },
+      // onDone
+      (full: string) => {
+        setSessions(prev => {
+          const next = prev.map(s => {
+            if (s.id !== sessionId) return s
+            return {
+              ...s,
+              messages: s.messages.map(m =>
+                m.id === assistantId ? { ...m, content: full || m.content, streaming: false } : m
+              ),
+              updatedAt: Date.now(),
+            }
+          })
+          saveSessions(next)
+          return next
         })
-        const data = await res.json()
-        updateMessage(sid, assistantMsgId, {
-          content: `🚀 **Task Created** \`${data.task_id}\`\n\n**Goal:** ${content}\n\n**Status:** Planning → Executing\n\n> 🤖 God Agent v10 routing to specialized spaces...`,
-          streaming: false, agent: 'planner', provider: 'system',
+        setIsStreaming(false)
+        addComputerUseStep({
+          type: 'complete',
+          title: locale === 'my' ? 'လုပ်ဆောင်မှုပြီးဆုံးပါပြီ' : 'Task completed',
+          status: 'done',
         })
-      } else {
-        // Chat mode — kernel orchestrate
-        const res = await fetch(`${apiUrl}/api/v1/kernel/orchestrate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: content,
-            session_id: sessionId.current,
-            context: { chat_history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })) },
-          }),
+      },
+      // onError
+      (err: string) => {
+        setSessions(prev => {
+          const next = prev.map(s => {
+            if (s.id !== sessionId) return s
+            const errMsg = locale === 'my'
+              ? `❌ Backend ချိတ်ဆက်မရပါ: ${err}\n\nBackend URL ကို Settings > API Keys တွင် စစ်ဆေးပါ။`
+              : `❌ **Backend Error:** ${err}\n\nCheck backend URL in Settings → API Keys.\n\nMake sure HF Space is running: https://huggingface.co/spaces/PYAE1994/autonomous-coding-system`
+            return {
+              ...s,
+              messages: s.messages.map(m =>
+                m.id === assistantId ? { ...m, content: errMsg, streaming: false, error: true } : m
+              ),
+            }
+          })
+          saveSessions(next)
+          return next
         })
-        const data = await res.json()
-        const responseContent = data.result || data.content || data.response || 'Response received.'
-        const provider = data.provider || ''
-        updateMessage(sid, assistantMsgId, {
-          content: responseContent,
-          streaming: false,
-          agent: 'god-agent',
-          provider,
+        setIsStreaming(false)
+        addComputerUseStep({
+          type: 'error',
+          title: 'Connection failed',
+          detail: err.slice(0, 100),
+          status: 'error',
+        })
+      },
+      // onComputerUseStep
+      (step: { type: string; title: string; detail?: string }) => {
+        addComputerUseStep({
+          type: step.type as ComputerUseStep['type'],
+          title: step.title,
+          detail: step.detail,
+          status: 'running',
         })
       }
-    } catch (err: any) {
-      updateMessage(sid, assistantMsgId, {
-        content: `❌ **Error:** ${err.message}\n\nMake sure the backend is running at \`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}\``,
-        streaming: false, agent: 'debug', error: true,
-      })
-    } finally {
-      setIsStreaming(false)
-      setStreamingId(null)
+    )
+
+    abortRef.current = ctrl
+  }, [activeId, isStreaming, sessions, locale, addComputerUseStep, setComputerUseOpen, updateSession])
+
+  const stopStreaming = () => {
+    abortRef.current?.abort()
+    setIsStreaming(false)
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      messages: s.messages.map(m => m.streaming ? { ...m, streaming: false } : m),
+    })))
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(input)
     }
-  }, [input, isStreaming, activeId, mode, messages, addMessage, updateMessage])
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
   }
 
-  const autoResize = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
-    e.target.style.height = 'auto'
-    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
+  const handleQuickAction = (prompt: string) => {
+    setInput(prompt)
+    textareaRef.current?.focus()
   }
-
-  const filteredSessions = sessions.filter(s =>
-    !sidebarSearch || s.title.toLowerCase().includes(sidebarSearch.toLowerCase())
-  )
-
-  if (!mounted) return null
-
-  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full overflow-hidden" style={{ background: '#05060d' }}>
-
-      {/* ── Chat History Sidebar ─────────────────────────────────────────── */}
-      <div className="w-64 flex-shrink-0 flex flex-col border-r overflow-hidden"
-        style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}>
-
-        {/* New Chat Button */}
-        <div className="p-3 border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+    <div className="flex h-full overflow-hidden">
+      {/* Sessions Sidebar */}
+      <div className="w-56 shrink-0 flex flex-col border-r" style={{ background: 'var(--surface-1)', borderColor: 'var(--border)' }}>
+        <div className="p-3 shrink-0">
           <button
-            onClick={createNewChat}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] active:scale-95"
-            style={{ background: 'var(--brand)', color: '#fff' }}
+            onClick={createSession}
+            className="btn btn-primary w-full justify-center text-xs"
           >
-            <Plus size={15} />
-            New Chat
+            <Plus size={13} />
+            {locale === 'my' ? 'စကားပြောသစ်' : 'New Chat'}
           </button>
         </div>
 
-        {/* Search */}
-        <div className="px-3 py-2 flex-shrink-0">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
-            <Search size={12} style={{ color: 'var(--text-muted)' }} />
-            <input
-              value={sidebarSearch}
-              onChange={e => setSidebarSearch(e.target.value)}
-              placeholder="Search chats..."
-              className="flex-1 bg-transparent text-xs outline-none"
-              style={{ color: 'var(--text-primary)' }}
-            />
+        {/* Backend Status */}
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs"
+            style={{
+              background: backendStatus === 'online' ? 'rgba(34,197,94,0.08)' : backendStatus === 'offline' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+              color: backendStatus === 'online' ? '#4ade80' : backendStatus === 'offline' ? '#f87171' : '#fbbf24',
+            }}>
+            {backendStatus === 'online' ? <Wifi size={10} /> : backendStatus === 'offline' ? <WifiOff size={10} /> : <RefreshCw size={10} />}
+            <span>Backend: {backendStatus === 'online' ? (locale === 'my' ? 'ချိတ်ဆက်ပြီး' : 'Connected') : backendStatus === 'offline' ? (locale === 'my' ? 'ဆက်သွယ်မရ' : 'Offline') : (locale === 'my' ? 'စစ်ဆေးနေ' : 'Checking...')}</span>
           </div>
         </div>
 
-        {/* Sessions List */}
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {filteredSessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 gap-2">
-              <MessageSquare size={24} style={{ color: 'var(--text-muted)' }} />
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>No chats yet</span>
+        {/* Session List */}
+        <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
+          {sessions.length === 0 && (
+            <div className="px-2 py-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+              {locale === 'my' ? 'စကားပြောမရှိသေးပါ' : 'No sessions yet'}
             </div>
-          ) : (
-            <AnimatePresence>
-              {filteredSessions.map(session => (
-                <motion.div
-                  key={session.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                  onClick={() => setActiveId(session.id)}
-                  className="group relative flex items-start gap-2 p-2.5 rounded-xl cursor-pointer mb-1 transition-all"
-                  style={{
-                    background: activeId === session.id ? 'var(--bg-4)' : 'transparent',
-                    border: `1px solid ${activeId === session.id ? 'rgba(99,102,241,0.3)' : 'transparent'}`,
-                  }}
-                  onMouseEnter={e => {
-                    if (activeId !== session.id) {
-                      (e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (activeId !== session.id) {
-                      (e.currentTarget as HTMLElement).style.background = 'transparent'
-                    }
-                  }}
-                >
-                  <MessageSquare size={13} className="mt-0.5 flex-shrink-0"
-                    style={{ color: activeId === session.id ? '#818cf8' : 'var(--text-muted)' }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium truncate" style={{ color: activeId === session.id ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                      {session.title}
-                    </div>
-                    <div className="text-[10px] truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {formatTime(session.updatedAt)}
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => deleteSession(session.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition-all hover:bg-red-500/20"
-                  >
-                    <Trash2 size={10} className="text-red-400" />
-                  </button>
-                </motion.div>
-              ))}
-            </AnimatePresence>
           )}
-        </div>
-
-        {/* Provider Status */}
-        <div className="p-3 border-t flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
-          <div className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>AI PROVIDERS</div>
-          <div className="flex gap-1.5 flex-wrap">
-            {['Gemini', 'SambaNova', 'GitHub'].map(p => (
-              <span key={p} className="text-[9px] px-2 py-0.5 rounded-full font-medium"
-                style={{ background: 'rgba(99,102,241,0.12)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}>
-                {p}
+          {sessions.map(s => (
+            <div
+              key={s.id}
+              onClick={() => { setActiveId(s.id); saveActiveId(s.id) }}
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer group"
+              style={{
+                background: s.id === activeId ? 'rgba(124,58,237,0.12)' : 'transparent',
+                border: s.id === activeId ? '1px solid rgba(124,58,237,0.2)' : '1px solid transparent',
+              }}
+            >
+              <MessageSquare size={12} style={{ color: s.id === activeId ? 'var(--accent-bright)' : 'var(--text-muted)', flexShrink: 0 }} />
+              <span className="text-xs truncate flex-1" style={{ color: s.id === activeId ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                {s.title || (locale === 'my' ? 'စကားပြောသစ်' : 'New Chat')}
               </span>
-            ))}
-          </div>
+              <button
+                onClick={e => { e.stopPropagation(); deleteSession(s.id) }}
+                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-500/20 transition-all shrink-0"
+              >
+                <Trash2 size={10} style={{ color: '#f87171' }} />
+              </button>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Main Chat Area ────────────────────────────────────────────────── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-
-        {/* Chat Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b flex-shrink-0"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-              {activeSession?.title || 'God Agent OS'}
-            </span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0"
-              style={{ background: 'rgba(99,102,241,0.12)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.25)' }}>
-              v10 · 22 Spaces
-            </span>
-          </div>
-
-          {/* Mode Toggle */}
-          <div className="flex p-0.5 rounded-xl gap-0.5 flex-shrink-0"
-            style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}>
-            <button onClick={() => setMode('agent')}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all"
-              style={{ background: mode === 'agent' ? 'var(--brand)' : 'transparent', color: mode === 'agent' ? '#fff' : 'var(--text-muted)' }}>
-              <Zap size={11} />
-              Agent
-            </button>
-            <button onClick={() => setMode('chat')}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all"
-              style={{ background: mode === 'chat' ? 'var(--bg-4)' : 'transparent', color: mode === 'chat' ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-              <MessageSquare size={11} />
-              Chat
-            </button>
-          </div>
-        </div>
-
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {messages.length === 0 ? (
-            /* Welcome / Empty State */
-            <div className="flex flex-col items-center justify-center h-full gap-8 py-8 max-w-2xl mx-auto">
+      {/* Main Chat */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {!activeSession ? (
+            // Welcome screen
+            <div className="flex flex-col items-center justify-center h-full gap-6">
               <div className="text-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="w-24 h-24 rounded-3xl mx-auto mb-5 flex items-center justify-center relative"
-                  style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}
-                >
-                  <Zap size={40} className="text-indigo-400" />
-                  <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                    style={{ background: 'var(--brand)' }}>v10</div>
-                </motion.div>
-                <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-                  GOD AGENT OS v10
-                </h2>
-                <p className="text-sm font-medium mb-1" style={{ color: '#a5b4fc' }}>
-                  General Autonomous Agent OS
-                </p>
-                <p className="text-xs max-w-sm mx-auto mt-2" style={{ color: 'var(--text-secondary)' }}>
-                  Powered by Gemini · SambaNova · GitHub Models<br />
-                  22 Worker Spaces · 16 Autonomous Agents
+                <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, var(--accent), #4f46e5)' }}>
+                  <Zap size={28} className="text-white" />
+                </div>
+                <h1 className="text-2xl font-black text-white mb-2">
+                  {locale === 'my' ? 'GOD AGENT OS v11' : 'GOD AGENT OS v11'}
+                </h1>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {locale === 'my'
+                    ? 'Code ရေး · Debug · Deploy · Browser · Git · Memory — 16 Agent + 22 Space'
+                    : 'Code · Debug · Deploy · Browse · Git · Memory — 16 Agents + 22 Spaces'}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
-                {QUICK_ACTIONS.map(({ icon: Icon, label, prompt }) => (
-                  <motion.button
-                    key={label}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => handleSubmit(prompt)}
-                    className="flex items-center gap-2.5 p-3 rounded-xl text-left transition-all"
-                    style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(99,102,241,0.5)'
-                      ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-4)'
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
-                      ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-3)'
-                    }}
+              {/* Quick Actions */}
+              <div className="grid grid-cols-2 gap-2 max-w-lg w-full">
+                {QUICK_ACTIONS.map((a, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { if (!activeId) createSession(); handleQuickAction(a.prompt) }}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs transition-all hover:-translate-y-0.5 card"
+                    style={{ ':hover': { borderColor: 'var(--border-hover)' } } as React.CSSProperties}
                   >
-                    <Icon size={14} className="text-indigo-400 flex-shrink-0" />
-                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                  </motion.button>
+                    <a.icon size={14} style={{ color: 'var(--accent-bright)', flexShrink: 0 }} />
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {locale === 'my' ? a.labelMy : a.label}
+                    </span>
+                    <ChevronRight size={10} style={{ color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : activeSession.messages.length === 0 ? (
+            // Empty session
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <Sparkles size={32} style={{ color: 'var(--accent)' }} />
+              <div className="text-center">
+                <p className="text-sm font-semibold text-white">
+                  {locale === 'my' ? 'စကားပြောစတင်ပါ' : 'Start a conversation'}
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {locale === 'my' ? 'မည်သည့်ရည်မှန်းချက်မဆို ပေးနိုင်သည်' : 'Give me any goal and I\'ll plan, code & execute it'}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 max-w-lg w-full">
+                {QUICK_ACTIONS.slice(0, 4).map((a, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleQuickAction(a.prompt)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs card transition-all hover:-translate-y-0.5"
+                  >
+                    <a.icon size={12} style={{ color: 'var(--accent-bright)' }} />
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {locale === 'my' ? a.labelMy : a.label}
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
           ) : (
-            /* Messages */
-            <div className="max-w-3xl mx-auto space-y-4">
-              <AnimatePresence>
-                {messages.map(msg => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {msg.role === 'assistant' && (
-                      <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                        style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
-                        <Zap size={13} className="text-white" />
-                      </div>
-                    )}
-                    <div className={`max-w-[78%] ${msg.role === 'user' ? 'order-first' : ''}`}>
-                      <div
-                        className="px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
-                        style={{
-                          background: msg.role === 'user'
-                            ? 'var(--brand)'
-                            : msg.error
-                              ? 'rgba(239,68,68,0.1)'
-                              : 'var(--bg-3)',
-                          color: msg.role === 'user' ? '#fff' : msg.error ? '#fca5a5' : 'var(--text-primary)',
-                          border: msg.role === 'user' ? 'none' : `1px solid ${msg.error ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-                          borderRadius: msg.role === 'user' ? '20px 20px 4px 20px' : '4px 20px 20px 20px',
-                        }}
-                      >
-                        {msg.streaming ? (
-                          <span className="flex items-center gap-2">
-                            <span style={{ color: 'var(--text-secondary)' }}>
-                              {msg.content || 'Thinking'}
-                            </span>
-                            <span className="flex gap-1">
-                              {[0,1,2].map(i => (
-                                <span key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce inline-block"
-                                  style={{ animationDelay: `${i * 0.2}s` }} />
-                              ))}
-                            </span>
-                          </span>
-                        ) : (
-                          msg.content
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 px-1">
-                        {msg.agent && msg.role === 'assistant' && (
-                          <span className="text-[9px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                            {msg.agent}
-                          </span>
-                        )}
-                        {msg.provider && msg.provider !== 'system' && msg.provider !== 'demo' && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded"
-                            style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8' }}>
-                            {msg.provider}
-                          </span>
-                        )}
-                        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    </div>
-                    {msg.role === 'user' && (
-                      <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                        style={{ background: 'var(--bg-4)', border: '1px solid var(--border)' }}>
-                        <span className="text-xs">U</span>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+            // Messages
+            <div className="max-w-3xl mx-auto">
+              {activeSession.messages.map(msg => (
+                <MessageBubble key={msg.id} msg={msg} />
+              ))}
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
-        {/* Input Area */}
-        <div className="px-4 pb-4 pt-2 border-t flex-shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}>
+        {/* Input Bar */}
+        <div className="p-4 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="max-w-3xl mx-auto">
-            <div
-              className={`relative rounded-2xl transition-all ${isStreaming ? 'ring-2 ring-indigo-500/40' : 'focus-within:ring-2 focus-within:ring-indigo-500/50'}`}
-              style={{ background: 'var(--bg-3)', border: '1px solid var(--border)' }}
-            >
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={autoResize}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  mode === 'agent'
-                    ? 'Describe any goal... 22 spaces will autonomously execute it'
-                    : 'Ask anything... (Shift+Enter for newline)'
-                }
-                disabled={isStreaming}
-                rows={1}
-                className="w-full bg-transparent text-sm px-4 py-3 pr-14 resize-none outline-none max-h-40 overflow-auto"
-                style={{ color: 'var(--text-primary)', minHeight: '48px' }}
-              />
-              <div className="absolute right-2.5 bottom-2.5">
-                {isStreaming ? (
-                  <button type="button"
-                    onClick={() => { setIsStreaming(false); setStreamingId(null) }}
-                    className="p-2 rounded-xl transition-all active:scale-90"
-                    style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
-                    <Square size={14} className="text-red-400" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSubmit()}
-                    disabled={!input.trim()}
-                    className="p-2 rounded-xl transition-all disabled:opacity-30 active:scale-90"
-                    style={{ background: input.trim() ? 'var(--brand)' : 'var(--bg-4)' }}>
-                    <Send size={14} className="text-white" />
-                  </button>
-                )}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isStreaming}
+                  placeholder={locale === 'my'
+                    ? 'ရည်မှန်းချက်တစ်ခုပေးပါ... ကျွန်ုပ် စီစဉ်၊ code ရေး၍ လုပ်ဆောင်မည်'
+                    : "Give me a goal... I'll plan, code & execute autonomously (Shift+Enter for newline)"}
+                  className="input resize-none"
+                  style={{ minHeight: 44, maxHeight: 200, paddingRight: 12 }}
+                  rows={1}
+                  onInput={(e) => {
+                    const t = e.target as HTMLTextAreaElement
+                    t.style.height = 'auto'
+                    t.style.height = Math.min(t.scrollHeight, 200) + 'px'
+                  }}
+                />
               </div>
+
+              {isStreaming ? (
+                <button
+                  onClick={stopStreaming}
+                  className="btn p-3 shrink-0"
+                  style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}
+                  title={locale === 'my' ? 'ရပ်ရန်' : 'Stop'}
+                >
+                  <Square size={16} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => sendMessage(input)}
+                  disabled={!input.trim() || isStreaming}
+                  className="btn btn-primary p-3 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={locale === 'my' ? 'ပို့ရန်' : 'Send'}
+                >
+                  <Send size={16} />
+                </button>
+              )}
             </div>
-            <div className="flex items-center justify-between mt-1.5 px-1">
+            <div className="flex items-center gap-3 mt-2 px-1">
               <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {mode === 'agent'
-                  ? '⚡ Agent Mode — 22 spaces · Gemini · SambaNova · GitHub Models'
-                  : '💬 Chat Mode — direct conversation with God Agent OS'}
+                {isStreaming ? (
+                  <span className="flex items-center gap-1" style={{ color: 'var(--accent-bright)' }}>
+                    <Brain size={9} style={{ animation: 'pulse 1s infinite' }} />
+                    {locale === 'my' ? 'Agent လုပ်ဆောင်နေသည်...' : 'Agent is working...'}
+                  </span>
+                ) : (
+                  locale === 'my' ? 'Enter = ပို့ · Shift+Enter = လိုင်းသစ်' : 'Enter to send · Shift+Enter for new line'
+                )}
               </span>
-              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Enter ↵</span>
+              <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {locale === 'my' ? 'God Mode v11' : 'God Mode v11 · 16 Agents'}
+              </span>
             </div>
           </div>
         </div>
@@ -611,3 +619,5 @@ export default function ChatMainPage() {
     </div>
   )
 }
+
+// End of ChatMainPage

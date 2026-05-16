@@ -1,4 +1,4 @@
-name: 🚀 Deploy God Agent OS v10
+name: 🚀 Deploy GOD AGENT OS v11
 
 on:
   push:
@@ -7,22 +7,28 @@ on:
 
 env:
   HF_SPACE: PYAE1994/autonomous-coding-system
-  HF_USER: pyaesonegtckglay-dotcom
+  HF_USER: PYAE1994
 
 jobs:
+
+  # ── 1. Deploy Backend to HuggingFace Space ──────────────────────────────────
   deploy-hf-backend:
-    name: 🤗 Deploy Backend to HuggingFace Spaces
+    name: 🤗 Deploy Backend to HF Space
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
 
-      - name: 📦 Install HF Hub CLI
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install HF Hub
         run: pip install huggingface_hub
 
-      - name: 🔐 Configure HF Space secrets via API
+      - name: 🔐 Push HF Space Secrets
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
@@ -43,48 +49,48 @@ jobs:
                   "GEMINI_KEY": os.environ.get("GEMINI_KEY", ""),
                   "SAMBANOVA_KEY": os.environ.get("SAMBANOVA_KEY", ""),
                   "GITHUB_KEY": os.environ.get("GITHUB_KEY", ""),
-                  "DB_PATH": "/data/god_agent_os.db",
+                  "DB_PATH": "/data/god_agent_v11.db",
+                  "WORKSPACE_DIR": "/tmp/god_workspace",
               }
               for k, v in secrets.items():
                   if v:
                       try:
                           api.add_space_secret(repo_id=repo_id, key=k, value=v)
-                          print(f"Set secret: {k}")
+                          print(f"✓ Set secret: {k}")
                       except Exception as e:
-                          print(f"Secret {k}: {e}")
+                          print(f"⚠ Secret {k}: {e}")
           except Exception as e:
-              print(f"HF secrets: {e}")
+              print(f"HF secrets error: {e}")
           EOF
 
       - name: 🚀 Push Backend to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          cd backend
           git config --global user.email "ci@godagentos.ai"
           git config --global user.name "God Agent OS CI"
 
-          git clone https://${{ env.HF_USER }}:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} /tmp/hf-space 2>/dev/null || \
-          git clone https://PYAE1994:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} /tmp/hf-space || true
+          # Clone HF space
+          git clone https://${{ env.HF_USER }}:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} /tmp/hf-space || true
 
+          # Copy backend files
           rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
-            . /tmp/hf-space/ 2>/dev/null || cp -r . /tmp/hf-space/ 2>/dev/null || true
+            backend/ /tmp/hf-space/ 2>/dev/null || cp -rf backend/. /tmp/hf-space/ || true
 
           cd /tmp/hf-space
           git add -A
-          git diff --staged --quiet || git commit -m "Deploy God Agent OS v10 $(date '+%Y-%m-%d %H:%M')"
-          git push https://${{ env.HF_USER }}:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} HEAD:main 2>/dev/null || \
-          git push https://PYAE1994:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} HEAD:main || true
-          echo "HF Space deployment triggered"
+          git diff --staged --quiet || git commit -m "🚀 Deploy God Agent OS v11 - $(date '+%Y-%m-%d %H:%M')"
+          git push https://${{ env.HF_USER }}:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} HEAD:main || true
+          echo "✅ HF Space deployment triggered"
 
+  # ── 2. Deploy Frontend to Vercel ────────────────────────────────────────────
   deploy-vercel-frontend:
     name: ▲ Deploy Frontend to Vercel
     runs-on: ubuntu-latest
-    needs: []
     steps:
       - uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
+      - name: 🔧 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -110,3 +116,4 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           working-directory: ./frontend
           vercel-args: '--prod'
+          github-comment: false
