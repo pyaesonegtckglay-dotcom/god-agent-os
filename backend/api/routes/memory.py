@@ -1,20 +1,66 @@
 """
-Memory API Routes — Persistent agent memory and chat sessions
+Memory API Routes — Persistent agent memory
 """
 
 import time
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from core.models import MemorySaveRequest, MemorySearchRequest
-from memory.db import (
-    save_memory,
-    search_memory,
-    get_project_memory,
-    get_history,
-    list_sessions,
-    get_session,
-)
+from memory.db import save_memory, search_memory, get_project_memory, get_history, list_sessions
 
 router = APIRouter()
+
+
+@router.get("/", summary="List all memories")
+async def list_memories(
+    session_id: str = Query(default=""),
+    limit: int = Query(default=50, le=200),
+):
+    """Return recent memories — used by the frontend Memory page."""
+    try:
+        from memory.db import search_memory as _search
+        import aiosqlite
+        from memory.db import DB_PATH
+        import json
+
+        async with aiosqlite.connect(DB_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            if session_id:
+                async with db.execute(
+                    "SELECT * FROM memory WHERE session_id = ? ORDER BY updated_at DESC LIMIT ?",
+                    (session_id, limit)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+            else:
+                async with db.execute(
+                    "SELECT * FROM memory ORDER BY updated_at DESC LIMIT ?", (limit,)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+
+            memories = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["metadata"] = json.loads(d.get("metadata") or "{}")
+                except Exception:
+                    d["metadata"] = {}
+                # Format date for frontend
+                ts = d.get("created_at") or d.get("updated_at")
+                if ts:
+                    import datetime
+                    d["date"] = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+                memories.append(d)
+
+        # Count sessions
+        sessions = await list_sessions(limit=100)
+
+        return {
+            "memories": memories,
+            "total": len(memories),
+            "sessions": len(sessions),
+            "storage": f"{round(sum(len(m.get('content','')) for m in memories) / 1024, 1)} KB",
+        }
+    except Exception as e:
+        return {"memories": [], "total": 0, "sessions": 0, "storage": "0 KB", "error": str(e)}
 
 
 @router.post("/", summary="Save memory")
@@ -51,81 +97,7 @@ async def project_memory(
     return {"project_id": project_id, "memories": results, "total": len(results)}
 
 
-@router.get("/sessions", summary="List chat sessions")
-async def sessions(limit: int = Query(default=100, le=500)):
-    results = await list_sessions(limit=limit)
-    return {"sessions": results, "total": len(results)}
-
-
-@router.get("/sessions/{session_id}", summary="Get session metadata")
-async def session_detail(session_id: str):
-    session = await get_session(session_id)
-    return {"session": session}
-
-
 @router.get("/history/{session_id}", summary="Get conversation history")
-async def history(session_id: str, limit: int = Query(default=100, le=500)):
+async def history(session_id: str, limit: int = Query(default=50, le=200)):
     results = await get_history(session_id, limit=limit)
     return {"session_id": session_id, "history": results, "total": len(results)}
-
-
-@router.get("/stats", summary="Memory statistics")
-async def memory_stats():
-    """Returns aggregate memory statistics."""
-    try:
-        sessions_result = await list_sessions(limit=500)
-        total_sessions = len(sessions_result)
-        # Estimate total memories across all sessions
-        total_memories = 0
-        for session in sessions_result[:20]:  # Sample first 20 sessions
-            sid = session.get("session_id") or session.get("id", "")
-            if sid:
-                try:
-                    hist = await get_history(sid, limit=500)
-                    total_memories += len(hist)
-                except Exception:
-                    pass
-        return {
-            "total_memories": total_memories,
-            "total_sessions": total_sessions,
-            "storage_estimate_mb": round(total_memories * 0.5, 1),
-            "last_indexed": time.time(),
-            "timestamp": time.time(),
-        }
-    except Exception as e:
-        return {
-            "total_memories": 0,
-            "total_sessions": 0,
-            "storage_estimate_mb": 0,
-            "last_indexed": time.time(),
-            "timestamp": time.time(),
-            "error": str(e),
-        }
-
-
-@router.get("/recent", summary="Recent memories across all sessions")
-async def recent_memories(limit: int = Query(default=20, le=100)):
-    """Returns recent memories from the most recent sessions."""
-    try:
-        sessions_result = await list_sessions(limit=10)
-        memories = []
-        for session in sessions_result:
-            sid = session.get("session_id") or session.get("id", "")
-            if not sid:
-                continue
-            try:
-                hist = await get_history(sid, limit=5)
-                for item in hist:
-                    memories.append({
-                        "session_id": sid,
-                        "role": item.get("role", "unknown"),
-                        "content": (item.get("content") or "")[:200],
-                        "timestamp": item.get("timestamp", time.time()),
-                        "agent": item.get("agent"),
-                    })
-            except Exception:
-                continue
-        memories.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-        return {"memories": memories[:limit], "total": len(memories)}
-    except Exception as e:
-        return {"memories": [], "total": 0, "error": str(e)}

@@ -111,7 +111,11 @@ export async function streamOrchestrate(
   const base = getApiBase()
   const controller = new AbortController()
 
+  // Emit thinking step immediately
+  onComputerUseStep?.({ type: 'thinking', title: `Analyzing request...`, detail: message.slice(0, 80) })
+
   try {
+    // First try streaming
     const res = await fetch(`${base}/api/v1/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -125,7 +129,22 @@ export async function streamOrchestrate(
 
     if (!res.ok) {
       const text = await res.text()
-      onError(`Backend error ${res.status}: ${text.slice(0, 200)}`)
+      // Try non-streaming fallback
+      return await _nonStreamFallback(base, message, sessionId, controller, onChunk, onDone, onError, onComputerUseStep)
+    }
+
+    const contentType = res.headers.get('content-type') || ''
+    
+    // If not streaming response, parse as JSON
+    if (!contentType.includes('text/event-stream') && !contentType.includes('text/plain')) {
+      const json = await res.json()
+      const reply = json?.response || json?.message || json?.content || json?.choices?.[0]?.message?.content || JSON.stringify(json)
+      if (reply) {
+        onComputerUseStep?.({ type: 'complete', title: 'Response received' })
+        onDone(reply)
+      } else {
+        onError('Empty response from backend')
+      }
       return controller
     }
 
@@ -134,11 +153,9 @@ export async function streamOrchestrate(
     let full = ''
 
     if (!reader) {
-      onError('No response body')
-      return controller
+      return await _nonStreamFallback(base, message, sessionId, controller, onChunk, onDone, onError, onComputerUseStep)
     }
 
-    // Emit thinking step
     onComputerUseStep?.({ type: 'thinking', title: `Processing: ${message.slice(0, 60)}...` })
 
     while (true) {
@@ -179,15 +196,98 @@ export async function streamOrchestrate(
               title: `Generated ${event.data?.code_blocks || 0} code blocks (${event.data?.total_lines || 0} lines)`,
               detail: event.data?.languages?.join(', '),
             })
+          } else if (event.response || event.message || event.content) {
+            // Direct JSON response embedded in SSE
+            const reply = event.response || event.message || event.content
+            full += reply
+            onChunk(reply)
           }
-        } catch {}
+        } catch {
+          // Plain text chunk
+          const chunk = line.slice(5).trim()
+          if (chunk && chunk !== '[DONE]') {
+            full += chunk
+            onChunk(chunk)
+          }
+        }
       }
     }
-    onDone(full)
+
+    if (full) {
+      onDone(full)
+    } else {
+      // Streaming gave no content, try non-streaming
+      return await _nonStreamFallback(base, message, sessionId, controller, onChunk, onDone, onError, onComputerUseStep)
+    }
+  } catch (e: unknown) {
+    const msg = (e as Error).message || String(e)
+    if (msg.includes('abort')) return controller
+    // Try non-streaming fallback
+    return await _nonStreamFallback(base, message, sessionId, controller, onChunk, onDone, onError, onComputerUseStep)
+  }
+  return controller
+}
+
+// ─── Non-streaming fallback ────────────────────────────────────────────────────
+
+async function _nonStreamFallback(
+  base: string,
+  message: string,
+  sessionId: string,
+  controller: AbortController,
+  onChunk: (chunk: string) => void,
+  onDone: (full: string) => void,
+  onError: (err: string) => void,
+  onComputerUseStep?: (step: { type: string; title: string; detail?: string }) => void
+) {
+  onComputerUseStep?.({ type: 'thinking', title: 'Sending to backend...' })
+  try {
+    // Try /api/v1/orchestrate first
+    const res = await fetch(`${base}/api/v1/orchestrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ message, session_id: sessionId, stream: false }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      const reply = json?.response || json?.message || json?.content || json?.result || JSON.stringify(json)
+      if (reply) {
+        onComputerUseStep?.({ type: 'complete', title: 'Response received' })
+        onDone(reply)
+        return controller
+      }
+    }
+  } catch {}
+
+  try {
+    // Try /api/v1/chat non-streaming
+    const res = await fetch(`${base}/api/v1/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: message }],
+        stream: false,
+        session_id: sessionId,
+      }),
+    })
+    if (res.ok) {
+      const json = await res.json()
+      const reply = json?.response || json?.message || json?.content ||
+        json?.choices?.[0]?.message?.content || JSON.stringify(json)
+      if (reply) {
+        onComputerUseStep?.({ type: 'complete', title: 'Response received' })
+        onDone(reply)
+        return controller
+      }
+    }
   } catch (e: unknown) {
     const msg = (e as Error).message || String(e)
     if (!msg.includes('abort')) onError(msg)
   }
+
+  onError('No response from backend. Make sure your HF Space is running.')
   return controller
 }
 
