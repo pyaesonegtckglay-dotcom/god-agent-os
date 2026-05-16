@@ -48,3 +48,4 @@ backend/**/__pycache__/
 backend/ai_router/__pycache__/
 .env.keys
 backend/.env.keys
+.vercel

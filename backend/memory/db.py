@@ -5,6 +5,7 @@ Handles tasks, memory, sessions, events
 
 import aiosqlite
 import os
+import pathlib
 import json
 import time
 from typing import Optional, List, Dict, Any
@@ -12,17 +13,15 @@ import structlog
 
 log = structlog.get_logger()
 
+import pathlib
 
-def _resolve_db_path() -> str:
-    explicit = os.environ.get("DB_PATH")
-    if explicit:
-        return explicit
+# Use /data for HuggingFace persistent storage, fallback to /tmp for local dev
+_default_db = "/data/god_agent_os.db" if os.path.isdir("/data") else "/tmp/god_agent_os.db"
+DB_PATH = os.environ.get("DB_PATH", _default_db)
 
-    preferred_dir = "/data" if os.path.isdir("/data") else "/tmp"
-    return os.path.join(preferred_dir, "god_agent_os.db")
-
-
-DB_PATH = _resolve_db_path()
+# Ensure the directory exists before SQLite tries to open the file
+_db_dir = str(pathlib.Path(DB_PATH).parent)
+os.makedirs(_db_dir, exist_ok=True)
 
 
 async def get_db() -> aiosqlite.Connection:
@@ -35,12 +34,12 @@ async def get_db() -> aiosqlite.Connection:
 
 async def init_db():
     """Initialize all tables."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     log.info("Initializing database", path=DB_PATH)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA foreign_keys=ON")
 
+        # Tasks table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
@@ -59,6 +58,7 @@ async def init_db():
             )
         """)
 
+        # Task events table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS task_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,6 +70,7 @@ async def init_db():
             )
         """)
 
+        # Memory table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,18 +86,19 @@ async def init_db():
             )
         """)
 
+        # Sessions table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 project_id TEXT,
                 user_id TEXT,
-                title TEXT DEFAULT '',
                 metadata TEXT DEFAULT '{}',
                 created_at REAL,
                 last_active REAL
             )
         """)
 
+        # GitHub operations table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS github_ops (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,83 +112,16 @@ async def init_db():
             )
         """)
 
+        # Indexes
         await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_events_task ON task_events(task_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_memory_session ON memory(session_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_memory_project ON memory(project_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_memory_type ON memory(memory_type)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(last_active)")
 
         await db.commit()
     log.info("✅ Database initialized")
-
-
-# ─── Session CRUD ──────────────────────────────────────────────────────────────
-
-async def upsert_session(
-    session_id: str,
-    title: str = "",
-    project_id: str = "",
-    user_id: str = "",
-    metadata: Optional[dict] = None,
-):
-    now = time.time()
-    metadata = metadata or {}
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT id, title, metadata, created_at FROM sessions WHERE id = ?", (session_id,)) as cursor:
-            row = await cursor.fetchone()
-
-        if row:
-            existing_title = row[1] or ""
-            merged_title = existing_title or title
-            existing_metadata = json.loads(row[2] or "{}")
-            existing_metadata.update(metadata)
-            await db.execute(
-                """
-                UPDATE sessions
-                SET project_id = ?, user_id = ?, title = ?, metadata = ?, last_active = ?
-                WHERE id = ?
-                """,
-                (project_id, user_id, merged_title, json.dumps(existing_metadata), now, session_id),
-            )
-        else:
-            await db.execute(
-                """
-                INSERT INTO sessions (id, project_id, user_id, title, metadata, created_at, last_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (session_id, project_id, user_id, title, json.dumps(metadata), now, now),
-            )
-        await db.commit()
-
-
-async def get_session(session_id: str) -> Optional[Dict[str, Any]]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                return None
-            data = dict(row)
-            data["metadata"] = json.loads(data.get("metadata") or "{}")
-            return data
-
-
-async def list_sessions(limit: int = 100) -> List[Dict[str, Any]]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute(
-            "SELECT * FROM sessions ORDER BY last_active DESC LIMIT ?",
-            (limit,),
-        ) as cursor:
-            rows = await cursor.fetchall()
-            result = []
-            for row in rows:
-                data = dict(row)
-                data["metadata"] = json.loads(data.get("metadata") or "{}")
-                result.append(data)
-            return result
 
 
 # ─── Task CRUD ─────────────────────────────────────────────────────────────────
@@ -313,7 +248,7 @@ async def search_memory(query: str, session_id: str = "", project_id: str = "", 
                 (q, limit)
             ) as cursor:
                 rows = await cursor.fetchall()
-        return [_decode_memory_row(dict(r)) for r in rows]
+        return [dict(r) for r in rows]
 
 
 async def get_project_memory(project_id: str, memory_type: str = "", limit: int = 100) -> List[Dict]:
@@ -331,20 +266,15 @@ async def get_project_memory(project_id: str, memory_type: str = "", limit: int 
                 (project_id, limit)
             ) as cursor:
                 rows = await cursor.fetchall()
-        return [_decode_memory_row(dict(r)) for r in rows]
+        return [dict(r) for r in rows]
 
 
 async def get_history(session_id: str, limit: int = 50) -> List[Dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM memory WHERE session_id = ? AND memory_type = 'conversation' ORDER BY created_at ASC LIMIT ?",
+            "SELECT * FROM memory WHERE session_id = ? AND memory_type = 'conversation' ORDER BY created_at DESC LIMIT ?",
             (session_id, limit)
         ) as cursor:
             rows = await cursor.fetchall()
-            return [_decode_memory_row(dict(r)) for r in rows]
-
-
-def _decode_memory_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    row["metadata"] = json.loads(row.get("metadata") or "{}")
-    return row
+            return [dict(r) for r in rows]

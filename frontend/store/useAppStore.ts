@@ -1,6 +1,9 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { SPACE_CATALOG, type WorkerRole } from '@/lib/spaceCatalog'
 
 export type Page =
+  | 'chat'
   | 'dashboard'
   | 'spaces'
   | 'agents'
@@ -11,10 +14,12 @@ export type Page =
   | 'analytics'
   | 'settings'
   | 'connectors'
+  | 'computer-use'
 
-export type Space = 'core' | 'browser' | 'sandbox' | 'coding' | 'vision' | 'debug' | 'deploy' | 'communication'
-export type Role = 'cognition' | 'automation' | 'execution' | 'repair' | 'visual_intelligence'
-export type ThemeMode = 'dark' | 'light'
+export type Space = string
+export type Role = WorkerRole
+export type Theme = 'dark' | 'amoled' | 'neon' | 'glass'
+export type Locale = 'en' | 'my'
 
 export interface SpaceStatus {
   name: Space
@@ -25,112 +30,124 @@ export interface SpaceStatus {
   icon: string
 }
 
+// ─── Computer-Use Step (Manus-style) ─────────────────────────────────────────
+export interface ComputerUseStep {
+  id: string
+  type: 'thinking' | 'browsing' | 'coding' | 'executing' | 'git' | 'deploy' | 'complete' | 'error' | 'reading' | 'writing' | 'searching'
+  title: string
+  detail?: string
+  status: 'running' | 'done' | 'error'
+  timestamp: number
+  data?: Record<string, unknown>
+}
+
 interface AppState {
   currentPage: Page
   activeSpace: Space | null
   currentRole: Role
   sidebarOpen: boolean
-  themeMode: ThemeMode
-  spaces: Record<Space, SpaceStatus>
+  theme: Theme
+  locale: Locale
+  spaces: Record<string, SpaceStatus>
+  computerUseSteps: ComputerUseStep[]
+  isComputerUseOpen: boolean
+  backendUrl: string
+  // Actions
   setCurrentPage: (page: Page) => void
   setActiveSpace: (space: Space | null) => void
   setCurrentRole: (role: Role) => void
   setSidebarOpen: (open: boolean) => void
-  setThemeMode: (mode: ThemeMode) => void
+  setTheme: (theme: Theme) => void
+  setLocale: (locale: Locale) => void
   activateSpace: (space: Space, role?: Role) => void
   deactivateSpace: (space: Space) => void
+  addComputerUseStep: (step: Omit<ComputerUseStep, 'id' | 'timestamp'>) => void
+  clearComputerUseSteps: () => void
+  setComputerUseOpen: (open: boolean) => void
+  setBackendUrl: (url: string) => void
 }
 
-const STORAGE_KEY = 'god-agent-os-ui'
+const initialSpaces: Record<string, SpaceStatus> = Object.fromEntries(
+  SPACE_CATALOG.map(space => [
+    space.id,
+    {
+      name: space.id,
+      active: false,
+      taskCount: 0,
+      lastActive: null,
+      color: space.color,
+      icon: space.icon,
+    },
+  ])
+)
 
-function getPersistedState() {
-  if (typeof window === 'undefined') {
-    return { currentPage: 'dashboard' as Page, sidebarOpen: true, themeMode: 'dark' as ThemeMode }
-  }
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      currentPage: 'chat',
+      activeSpace: null,
+      currentRole: 'cognition' as Role,
+      sidebarOpen: true,
+      theme: 'dark',
+      locale: 'en',
+      spaces: initialSpaces,
+      computerUseSteps: [],
+      isComputerUseOpen: false,
+      backendUrl: process.env.NEXT_PUBLIC_API_URL || 'https://pyae1994-autonomous-coding-system.hf.space',
 
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    const parsed = raw ? JSON.parse(raw) : {}
-    return {
-      currentPage: (parsed.currentPage || 'dashboard') as Page,
-      sidebarOpen: parsed.sidebarOpen ?? true,
-      themeMode: (parsed.themeMode || 'dark') as ThemeMode,
+      setCurrentPage: (page) => set({ currentPage: page }),
+      setActiveSpace: (space) => set({ activeSpace: space }),
+      setCurrentRole: (role) => set({ currentRole: role }),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      setTheme: (theme) => set({ theme }),
+      setLocale: (locale) => set({ locale }),
+      setBackendUrl: (url) => set({ backendUrl: url }),
+
+      activateSpace: (space, role) =>
+        set(state => ({
+          activeSpace: space,
+          currentRole: role || state.currentRole,
+          spaces: {
+            ...state.spaces,
+            [space]: {
+              ...state.spaces[space],
+              active: true,
+              lastActive: Date.now(),
+            },
+          },
+        })),
+
+      deactivateSpace: (space) =>
+        set(state => ({
+          spaces: {
+            ...state.spaces,
+            [space]: { ...state.spaces[space], active: false },
+          },
+        })),
+
+      addComputerUseStep: (step) =>
+        set(state => ({
+          computerUseSteps: [
+            ...state.computerUseSteps.slice(-99),
+            {
+              ...step,
+              id: Math.random().toString(36).slice(2, 10),
+              timestamp: Date.now(),
+            },
+          ],
+        })),
+
+      clearComputerUseSteps: () => set({ computerUseSteps: [] }),
+      setComputerUseOpen: (open) => set({ isComputerUseOpen: open }),
+    }),
+    {
+      name: 'god-agent-store',
+      partialize: (state) => ({
+        theme: state.theme,
+        locale: state.locale,
+        sidebarOpen: state.sidebarOpen,
+        backendUrl: state.backendUrl,
+      }),
     }
-  } catch {
-    return { currentPage: 'dashboard' as Page, sidebarOpen: true, themeMode: 'dark' as ThemeMode }
-  }
-}
-
-function persist(partial: Partial<Pick<AppState, 'currentPage' | 'sidebarOpen' | 'themeMode'>>) {
-  if (typeof window === 'undefined') return
-  try {
-    const current = getPersistedState()
-    const next = { ...current, ...partial }
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  } catch {}
-}
-
-function applyTheme(mode: ThemeMode) {
-  if (typeof document === 'undefined') return
-  document.documentElement.setAttribute('data-theme', mode)
-}
-
-const initialSpaces: Record<Space, SpaceStatus> = {
-  core:          { name: 'core',          active: false, taskCount: 0, lastActive: null, color: '#7c3aed', icon: '🧠' },
-  browser:       { name: 'browser',       active: false, taskCount: 0, lastActive: null, color: '#2563eb', icon: '🌐' },
-  sandbox:       { name: 'sandbox',       active: false, taskCount: 0, lastActive: null, color: '#059669', icon: '💻' },
-  coding:        { name: 'coding',        active: false, taskCount: 0, lastActive: null, color: '#d97706', icon: '🔧' },
-  vision:        { name: 'vision',        active: false, taskCount: 0, lastActive: null, color: '#db2777', icon: '👁️' },
-  debug:         { name: 'debug',         active: false, taskCount: 0, lastActive: null, color: '#dc2626', icon: '🐛' },
-  deploy:        { name: 'deploy',        active: false, taskCount: 0, lastActive: null, color: '#0891b2', icon: '🚀' },
-  communication: { name: 'communication', active: false, taskCount: 0, lastActive: null, color: '#7c3aed', icon: '💬' },
-}
-
-const persisted = getPersistedState()
-applyTheme(persisted.themeMode)
-
-export const useAppStore = create<AppState>((set) => ({
-  currentPage: persisted.currentPage,
-  activeSpace: null,
-  currentRole: 'cognition',
-  sidebarOpen: persisted.sidebarOpen,
-  themeMode: persisted.themeMode,
-  spaces: initialSpaces,
-
-  setCurrentPage: (page) => {
-    persist({ currentPage: page })
-    set({ currentPage: page })
-  },
-  setActiveSpace: (space) => set({ activeSpace: space }),
-  setCurrentRole: (role) => set({ currentRole: role }),
-  setSidebarOpen: (open) => {
-    persist({ sidebarOpen: open })
-    set({ sidebarOpen: open })
-  },
-  setThemeMode: (mode) => {
-    applyTheme(mode)
-    persist({ themeMode: mode })
-    set({ themeMode: mode })
-  },
-
-  activateSpace: (space, role = 'cognition') => set((state) => ({
-    activeSpace: space,
-    currentRole: role,
-    spaces: {
-      ...state.spaces,
-      [space]: {
-        ...state.spaces[space],
-        active: true,
-        lastActive: Date.now(),
-        taskCount: state.spaces[space].taskCount + 1,
-      },
-    },
-  })),
-
-  deactivateSpace: (space) => set((state) => ({
-    spaces: {
-      ...state.spaces,
-      [space]: { ...state.spaces[space], active: false },
-    },
-  })),
-}))
+  )
+)

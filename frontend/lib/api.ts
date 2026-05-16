@@ -1,132 +1,260 @@
-const HF_SPACE = 'https://pyae1994-autonomous-coding-system.hf.space'
-const HF_SPACE_WS = 'wss://pyae1994-autonomous-coding-system.hf.space'
+/**
+ * God Agent OS v11 — API Client
+ * Connects to real backend (HF Space or custom URL)
+ */
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || HF_SPACE).replace(/\/$/, '')
-const WS_BASE = (process.env.NEXT_PUBLIC_WS_URL || HF_SPACE_WS).replace(/\/$/, '')
+export const DEFAULT_BACKEND = process.env.NEXT_PUBLIC_API_URL || 'https://pyae1994-autonomous-coding-system.hf.space'
 
-export const API_URL = API_BASE
-export const WS_URL = WS_BASE
+function getBackendUrl(): string {
+  if (typeof window === 'undefined') return DEFAULT_BACKEND
+  try {
+    const stored = localStorage.getItem('god-agent-store')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      return parsed?.state?.backendUrl || DEFAULT_BACKEND
+    }
+  } catch {}
+  return DEFAULT_BACKEND
+}
+
+export function getApiBase(): string {
+  return getBackendUrl()
+}
+
+export function getWsBase(): string {
+  return getApiBase().replace(/^https?:\/\//, (m) => m === 'https://' ? 'wss://' : 'ws://')
+}
 
 export async function fetchAPI(path: string, options?: RequestInit) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
+  const base = getApiBase()
+  const res = await fetch(`${base}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers || {}),
+    },
     ...options,
   })
-
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(text || `API error: ${res.status}`)
+    throw new Error(`API ${res.status}: ${text.slice(0, 200) || res.statusText}`)
   }
-
   return res.json()
 }
 
-export function createWebSocket(path: string): WebSocket {
-  return new WebSocket(`${WS_BASE}${path}`)
+// ─── Health ────────────────────────────────────────────────────────────────
+
+export async function getHealth() {
+  return fetchAPI('/health')
 }
 
-export async function getKernelStatus() {
-  return fetchAPI('/api/v1/kernel/status')
+export async function getSystemStatus() {
+  return fetchAPI('/api/v1/system/status')
 }
+
+// ─── Chat / Orchestration ─────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+export async function sendChat(messages: ChatMessage[], options?: {
+  stream?: boolean
+  session_id?: string
+  model?: string
+  temperature?: number
+  max_tokens?: number
+}) {
+  return fetchAPI('/api/v1/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      messages,
+      stream: false,
+      session_id: options?.session_id || '',
+      model: options?.model || 'gemini-2.0-flash',
+      temperature: options?.temperature ?? 0.7,
+      max_tokens: options?.max_tokens ?? 4096,
+    }),
+  })
+}
+
+export function streamChat(messages: ChatMessage[], options?: {
+  session_id?: string
+  model?: string
+  temperature?: number
+  max_tokens?: number
+}): EventSource {
+  // Use fetch for SSE
+  return new EventSource(`${getApiBase()}/api/v1/chat/stream`)
+}
+
+export async function orchestrate(message: string, sessionId: string, context?: object) {
+  return fetchAPI('/api/v1/orchestrate', {
+    method: 'POST',
+    body: JSON.stringify({
+      message,
+      session_id: sessionId,
+      stream: false,
+      context: context || {},
+    }),
+  })
+}
+
+export async function streamOrchestrate(
+  message: string,
+  sessionId: string,
+  onChunk: (chunk: string) => void,
+  onDone: (full: string) => void,
+  onError: (err: string) => void,
+  onComputerUseStep?: (step: { type: string; title: string; detail?: string }) => void
+) {
+  const base = getApiBase()
+  const controller = new AbortController()
+
+  try {
+    const res = await fetch(`${base}/api/v1/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: message }],
+        stream: true,
+        session_id: sessionId,
+      }),
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      onError(`Backend error ${res.status}: ${text.slice(0, 200)}`)
+      return controller
+    }
+
+    const reader = res.body?.getReader()
+    const decoder = new TextDecoder()
+    let full = ''
+
+    if (!reader) {
+      onError('No response body')
+      return controller
+    }
+
+    // Emit thinking step
+    onComputerUseStep?.({ type: 'thinking', title: `Processing: ${message.slice(0, 60)}...` })
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const text = decoder.decode(value, { stream: true })
+      const lines = text.split('\n')
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue
+        const jsonStr = line.slice(5).trim()
+        if (jsonStr === '[DONE]') { onDone(full); return controller }
+        try {
+          const event = JSON.parse(jsonStr)
+          if (event.type === 'llm_chunk') {
+            const chunk = event.data?.chunk || ''
+            full += chunk
+            onChunk(chunk)
+          } else if (event.type === 'stream_end') {
+            onDone(event.data?.full_response || full)
+            return controller
+          } else if (event.type === 'agent_start') {
+            onComputerUseStep?.({
+              type: 'thinking',
+              title: `${event.data?.agent || 'Agent'}: ${event.data?.task?.slice(0, 60) || ''}`,
+            })
+          } else if (event.type === 'tool_called') {
+            onComputerUseStep?.({
+              type: event.data?.tool?.includes('browser') ? 'browsing' :
+                    event.data?.tool?.includes('code') ? 'coding' :
+                    event.data?.tool?.includes('git') ? 'git' :
+                    event.data?.tool?.includes('deploy') ? 'deploy' : 'executing',
+              title: event.data?.tool || 'Tool execution',
+              detail: event.data?.step,
+            })
+          } else if (event.type === 'code_generated') {
+            onComputerUseStep?.({
+              type: 'coding',
+              title: `Generated ${event.data?.code_blocks || 0} code blocks (${event.data?.total_lines || 0} lines)`,
+              detail: event.data?.languages?.join(', '),
+            })
+          }
+        } catch {}
+      }
+    }
+    onDone(full)
+  } catch (e: unknown) {
+    const msg = (e as Error).message || String(e)
+    if (!msg.includes('abort')) onError(msg)
+  }
+  return controller
+}
+
+// ─── Spaces ─────────────────────────────────────────────────────────────────
 
 export async function getSpaces() {
   return fetchAPI('/api/v1/spaces')
 }
 
-export async function executeInSpace(spaceName: string, task: string, role: string, sessionId: string) {
-  return fetchAPI(`/api/v1/spaces/${spaceName}/execute`, {
+// ─── Agents ─────────────────────────────────────────────────────────────────
+
+export async function getAgents() {
+  return fetchAPI('/api/v1/agents')
+}
+
+export async function runAgent(agentName: string, task: string, sessionId: string) {
+  return fetchAPI(`/api/v1/agents/${agentName}/run`, {
     method: 'POST',
-    body: JSON.stringify({ task, role, session_id: sessionId }),
+    body: JSON.stringify({ task, session_id: sessionId }),
   })
 }
 
-export async function orchestrate(message: string, sessionId: string, context?: object) {
-  return fetchAPI('/api/v1/kernel/orchestrate', {
-    method: 'POST',
-    body: JSON.stringify({ message, session_id: sessionId, context }),
-  })
-}
-
-export async function getConnectors() {
-  return fetchAPI('/api/v1/connectors')
-}
-
-export async function setConnectorToken(connectorId: string, token: string) {
-  return fetchAPI('/api/v1/connectors/set-token', {
-    method: 'POST',
-    body: JSON.stringify({ connector_id: connectorId, token }),
-  })
-}
-
-export async function getConnectorSummary() {
-  return fetchAPI('/api/v1/connectors/summary')
-}
-
-export async function getHealth() {
-  return fetchAPI('/api/v1/health')
-}
+// ─── Tasks ───────────────────────────────────────────────────────────────────
 
 export async function getTasks() {
   return fetchAPI('/api/v1/tasks/')
 }
 
+export async function createTask(goal: string, sessionId: string) {
+  return fetchAPI('/api/v1/chat/goal', {
+    method: 'POST',
+    body: JSON.stringify({ goal, session_id: sessionId }),
+  })
+}
+
+// ─── Memory ──────────────────────────────────────────────────────────────────
+
 export async function getMemory() {
   return fetchAPI('/api/v1/memory/')
 }
 
-export async function getSessions() {
-  return fetchAPI('/api/v1/memory/sessions')
+// ─── Connectors ──────────────────────────────────────────────────────────────
+
+export async function getConnectors() {
+  return fetchAPI('/api/v1/connectors')
 }
 
-export async function getSessionHistory(sessionId: string) {
-  return fetchAPI(`/api/v1/memory/history/${sessionId}`)
+// ─── AI Stats ────────────────────────────────────────────────────────────────
+
+export async function getAIStats() {
+  return fetchAPI('/api/v1/ai/stats')
 }
 
-// ── N8N API ───────────────────────────────────────────────────────────────────
-export async function n8nStatus() {
-  return fetchAPI('/api/v1/n8n/status')
+export async function getPoolStatus() {
+  return fetchAPI('/api/v1/ai/pool-status')
 }
 
-export async function n8nGetWorkflows(limit = 50) {
-  return fetchAPI(`/api/v1/n8n/workflows?limit=${limit}`)
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+
+export function createWebSocket(sessionId: string): WebSocket {
+  return new WebSocket(`${getWsBase()}/ws/${sessionId}`)
 }
 
-export async function n8nGetExecutions(workflowId?: string, limit = 20) {
-  const q = workflowId ? `&workflow_id=${workflowId}` : ''
-  return fetchAPI(`/api/v1/n8n/executions?limit=${limit}${q}`)
+export function createComputerUseWS(sessionId: string): WebSocket {
+  return new WebSocket(`${getWsBase()}/ws/computer-use/${sessionId}`)
 }
 
-export async function n8nGetStats() {
-  return fetchAPI('/api/v1/n8n/stats')
-}
-
-export async function n8nExecuteWorkflow(workflowId: string) {
-  return fetchAPI(`/api/v1/n8n/workflows/${workflowId}/execute`, { method: 'POST' })
-}
-
-export async function n8nToggleWorkflow(workflowId: string, active: boolean) {
-  return fetchAPI(`/api/v1/n8n/workflows/${workflowId}/activate`, {
-    method: 'PATCH',
-    body: JSON.stringify({ active }),
-  })
-}
-
-export async function n8nSetConfig(url: string, apiKey: string) {
-  return fetchAPI('/api/v1/n8n/config', {
-    method: 'POST',
-    body: JSON.stringify({ url, api_key: apiKey }),
-  })
-}
-
-export async function n8nGetConfig() {
-  return fetchAPI('/api/v1/n8n/config')
-}
-
-// ── Analytics (from health + memory) ─────────────────────────────────────────
-export async function getAnalytics() {
-  return fetchAPI('/api/v1/metrics')
-}
-
-export async function getMemoryStats() {
-  return fetchAPI('/api/v1/memory/stats').catch(() => null)
-}
+// ─── Export URLs ─────────────────────────────────────────────────────────────
+export const API_URL = DEFAULT_BACKEND
+export const WS_URL = DEFAULT_BACKEND.replace(/^https?:\/\//, (m) => m === 'https://' ? 'wss://' : 'ws://')

@@ -9,37 +9,21 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 import structlog
+from spaces.catalog import SPACE_CATALOG
 
 from memory.db import save_memory, upsert_session
 
 log = structlog.get_logger()
+SPACE_IDS = [space["id"] for space in SPACE_CATALOG]
 
-KERNEL_SYSTEM_PROMPT = """You are GOD AGENT OS v9 — a General Autonomous Agent Operating System.
+KERNEL_SYSTEM_PROMPT = f"""You are GOD AGENT OS v10 — a distributed autonomous agent operating system.
 
-Architecture: Space-Role Paradigm
-- SPACES: Core, Browser, Sandbox, Coding, Vision, Debug, Deploy, Communication
+Architecture: Distributed Worker Space Paradigm
+- SPACES: {', '.join(SPACE_IDS)}
 - ROLES: Cognition (Thinker), Automation (Operator), Execution (Doer), Repair (Fixer), Visual Intelligence (Observer)
 
-You are infinitely extensible. For ANY digital task, you select the right Space + Role combination.
-
-Core Capabilities:
-🧠 Cognition — Understand intent, break goals into steps, orchestrate Spaces
-🌐 Browser Space — Web research, navigation, data extraction
-💻 Sandbox Space — Code execution, shell commands, isolated environments
-🔧 Coding Space — Code generation, refactoring, analysis
-👁️ Vision Space — Image analysis, OCR, UI understanding
-🐛 Debug Space — Error analysis, self-healing, log parsing
-🚀 Deploy Space — Cloud deployments, CI/CD, containerization
-💬 Communication Space — Chat, notifications, multi-channel messaging
-
-Operating Principles:
-1. ANALYZE the request → identify required Spaces and Roles
-2. PLAN step-by-step execution across Spaces
-3. EXECUTE autonomously without asking for confirmation
-4. SELF-HEAL when errors occur
-5. PARALLELIZE independent tasks
-6. REMEMBER context across sessions
-
+You are infinitely extensible. For any digital task, select the best worker space and role combination.
+Prioritize god-core-space for orchestration, model-router-space for model strategy, deploy-worker-space for deployment, verification-worker-space for quality gates, and auth-gateway-space for permission concerns.
 Respond in Burmese or English based on user language.
 Be decisive, thorough, and production-focused.
 """
@@ -48,7 +32,7 @@ INTENT_CLASSIFICATION_PROMPT = """Classify this request for the Space-Role auton
 
 User message: "{message}"
 
-Available Spaces: core, browser, sandbox, coding, vision, debug, deploy, communication
+Available Spaces: god-core-space, coding-worker-space, sandbox-worker-space, terminal-worker-space, filesystem-worker-space, browser-worker-space, vision-worker-space, ui-worker-space, debug-worker-space, test-worker-space, verification-worker-space, git-worker-space, deploy-worker-space, connector-worker-space, memory-worker-space, knowledge-worker-space, workflow-worker-space, eventbus-space, observability-space, session-runtime-space, model-router-space, auth-gateway-space
 Available Roles: cognition, automation, execution, repair, visual_intelligence
 
 Respond ONLY with valid JSON:
@@ -73,7 +57,7 @@ class ContextManager:
         if session_id not in self._contexts:
             self._contexts[session_id] = {
                 "session_id": session_id,
-                "active_space": "core",
+                "active_space": "god-core-space",
                 "current_role": "cognition",
                 "task_history": [],
                 "short_term_memory": [],
@@ -104,14 +88,7 @@ class ToolRegistry:
     def __init__(self):
         self._tools: Dict[str, Dict[str, Any]] = {}
         self._space_tools: Dict[str, List[str]] = {
-            "core": [],
-            "browser": [],
-            "sandbox": [],
-            "coding": [],
-            "vision": [],
-            "debug": [],
-            "deploy": [],
-            "communication": [],
+            **{space_id: [] for space_id in SPACE_IDS},
         }
     
     def register(self, name: str, func, space: str, description: str):
@@ -145,8 +122,8 @@ class AgentKernel:
         self._spaces: Dict[str, Any] = {}
         self._active_tasks: Dict[str, Dict] = {}
         self._task_history: List[Dict] = []
-        self.version = "9.0.0"
-        log.info("🧠 Agent Kernel v9 initialized — Space-Role Architecture")
+        self.version = "10.0.0"
+        log.info("🧠 Agent Kernel v10 initialized — Distributed Worker Space Architecture")
     
     def register_space(self, name: str, space_instance):
         """Register a Space module."""
@@ -159,7 +136,7 @@ class AgentKernel:
     def get_status(self) -> Dict:
         return {
             "version": self.version,
-            "architecture": "Space-Role",
+            "architecture": "Distributed Worker Space",
             "spaces": list(self._spaces.keys()),
             "total_spaces": len(self._spaces),
             "active_tasks": len(self._active_tasks),
@@ -187,7 +164,7 @@ class AgentKernel:
         
         # Fallback
         return {
-            "primary_space": "core",
+            "primary_space": "god-core-space",
             "secondary_spaces": [],
             "role": "cognition",
             "intent": user_message,
@@ -201,7 +178,7 @@ class AgentKernel:
         """Route a task to the appropriate Space with the given Role."""
         space = self._spaces.get(space_name)
         if not space:
-            space = self._spaces.get("core")
+            space = self._spaces.get("god-core-space")
         
         if not space:
             return f"Space '{space_name}' not available."

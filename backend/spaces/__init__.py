@@ -1,21 +1,19 @@
 from .base_space import BaseSpace
-from .core_space import CoreSpace
-from .browser_space import BrowserSpace
-from .sandbox_space import SandboxSpace
-from .coding_space import CodingSpace
-from .vision_space import VisionSpace
-from .debug_space import DebugSpace
-from .deploy_space import DeploySpace
-from .communication_space import CommunicationSpace
+from .catalog import SPACE_CATALOG, SPACE_INDEX
+from .worker_space import WorkerSpace
+
+
+def build_all_spaces(ws_manager=None, ai_router=None):
+    return {
+        spec["id"]: WorkerSpace(spec=spec, ws_manager=ws_manager, ai_router=ai_router)
+        for spec in SPACE_CATALOG
+    }
+
 
 __all__ = [
     "BaseSpace",
-    "CoreSpace",
-    "BrowserSpace", 
-    "SandboxSpace",
-    "CodingSpace",
-    "VisionSpace",
-    "DebugSpace",
-    "DeploySpace",
-    "CommunicationSpace",
+    "WorkerSpace",
+    "SPACE_CATALOG",
+    "SPACE_INDEX",
+    "build_all_spaces",
 ]

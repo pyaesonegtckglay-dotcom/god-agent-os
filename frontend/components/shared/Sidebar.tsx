@@ -1,56 +1,52 @@
 'use client'
 
-import { 
-  LayoutDashboard, Box, Bot, ListTodo, Brain, 
-  BookOpen, GitBranch, BarChart2, Settings, 
-  Zap, Globe, Terminal, Code2, Eye, Bug, 
-  Rocket, MessageSquare, Plug
-} from 'lucide-react'
+import { MessageSquare, LayoutDashboard, Box, Bot, ListTodo, Brain, BookOpen, GitBranch, BarChart2, Settings, Zap, Plug, MonitorPlay } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import type { Page } from '@/store/useAppStore'
 
-const NAV_ITEMS: { id: Page; label: string; icon: any; group?: string }[] = [
-  { id: 'dashboard',  label: 'Dashboard',    icon: LayoutDashboard },
-  { id: 'spaces',     label: 'Spaces',       icon: Box },
-  { id: 'agents',     label: 'Agents',       icon: Bot },
-  { id: 'connectors', label: 'Connectors',   icon: Plug },
-  { id: 'tasks',      label: 'Tasks',        icon: ListTodo },
-  { id: 'memory',     label: 'Memory',       icon: Brain },
-  { id: 'knowledge',  label: 'Knowledge',    icon: BookOpen },
-  { id: 'workflows',  label: 'Workflows',    icon: GitBranch },
-  { id: 'analytics',  label: 'Analytics',    icon: BarChart2 },
-  { id: 'settings',   label: 'Settings',     icon: Settings },
-]
+interface NavItem {
+  id: Page
+  label: string
+  labelMy: string
+  icon: React.ElementType
+}
 
-const SPACES = [
-  { id: 'core',          label: 'Core',          icon: '🧠', color: '#7c3aed' },
-  { id: 'browser',       label: 'Browser',       icon: '🌐', color: '#2563eb' },
-  { id: 'sandbox',       label: 'Sandbox',       icon: '💻', color: '#059669' },
-  { id: 'coding',        label: 'Coding',        icon: '🔧', color: '#d97706' },
-  { id: 'vision',        label: 'Vision',        icon: '👁️', color: '#db2777' },
-  { id: 'debug',         label: 'Debug',         icon: '🐛', color: '#dc2626' },
-  { id: 'deploy',        label: 'Deploy',        icon: '🚀', color: '#0891b2' },
-  { id: 'communication', label: 'Comm',          icon: '💬', color: '#7c3aed' },
+const NAV_ITEMS: NavItem[] = [
+  { id: 'chat',        label: 'Chat',        labelMy: 'စကားပြော',    icon: MessageSquare },
+  { id: 'dashboard',   label: 'Dashboard',   labelMy: 'Dashboard',    icon: LayoutDashboard },
+  { id: 'spaces',      label: 'Spaces',      labelMy: 'Spaces (22)',  icon: Box },
+  { id: 'agents',      label: 'Agents',      labelMy: 'Agent (16)',   icon: Bot },
+  { id: 'connectors',  label: 'Connectors',  labelMy: 'ချိတ်ဆက်မှု', icon: Plug },
+  { id: 'tasks',       label: 'Tasks',       labelMy: 'လုပ်ငန်းများ', icon: ListTodo },
+  { id: 'memory',      label: 'Memory',      labelMy: 'မှတ်ဉာဏ်',    icon: Brain },
+  { id: 'knowledge',   label: 'Knowledge',   labelMy: 'ဗဟုသုတ',      icon: BookOpen },
+  { id: 'workflows',   label: 'Workflows',   labelMy: 'Workflow',     icon: GitBranch },
+  { id: 'analytics',   label: 'Analytics',   labelMy: 'Analytics',   icon: BarChart2 },
+  { id: 'settings',    label: 'Settings',    labelMy: 'ဆက်တင်',      icon: Settings },
 ]
 
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, spaces, activeSpace } = useAppStore()
+  const { currentPage, setCurrentPage, sidebarOpen, locale, isComputerUseOpen, setComputerUseOpen } = useAppStore()
 
   if (!sidebarOpen) return null
 
   return (
-    <aside className="w-52 flex-shrink-0 flex flex-col border-r h-full overflow-y-auto"
-      style={{ background: 'var(--bg-1, #07080f)', borderColor: 'var(--border, #1e2035)' }}>
-      
-      {/* Brand */}
-      <div className="p-3 border-b" style={{ borderColor: '#1e2035' }}>
+    <aside
+      className="w-52 shrink-0 flex flex-col h-full overflow-y-auto"
+      style={{ background: 'var(--surface-1)', borderRight: '1px solid var(--border)' }}
+    >
+      {/* Logo */}
+      <div className="p-3 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ background: 'linear-gradient(135deg, var(--accent), #4f46e5)', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}>
             <Zap size={16} className="text-white" />
           </div>
           <div>
             <div className="text-xs font-bold text-white">GOD AGENT OS</div>
-            <div className="text-[9px] text-violet-400 font-medium">v9 · Space-Role</div>
+            <div className="text-[9px] font-medium" style={{ color: 'var(--accent-bright)' }}>
+              v11 · God Mode
+            </div>
           </div>
         </div>
       </div>
@@ -65,56 +61,46 @@ export default function Sidebar() {
               <button
                 key={item.id}
                 onClick={() => setCurrentPage(item.id)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  active 
-                    ? 'bg-violet-500/15 text-violet-300 border border-violet-500/20'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/4'
-                }`}
+                className={`nav-item w-full text-left ${active ? 'active' : ''}`}
               >
                 <Icon size={13} />
-                {item.label}
+                {locale === 'my' ? item.labelMy : item.label}
+                {item.id === 'chat' && active && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                )}
               </button>
             )
           })}
         </div>
 
-        {/* Spaces Section */}
-        <div className="mt-4">
-          <div className="px-2 mb-2 text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-            Active Spaces
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            {SPACES.map(s => {
-              const isActive = spaces[s.id as keyof typeof spaces]?.active
-              const isSelected = activeSpace === s.id
-              return (
-                <div
-                  key={s.id}
-                  className="flex flex-col items-center p-1.5 rounded-lg text-center transition-all cursor-pointer"
-                  style={{
-                    background: isActive ? `${s.color}15` : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${isActive ? s.color + '40' : 'transparent'}`,
-                  }}
-                >
-                  <span className="text-sm">{s.icon}</span>
-                  <span className="text-[8px] mt-0.5" style={{ color: isActive ? s.color : '#475569' }}>
-                    {s.label}
-                  </span>
-                  {isActive && (
-                    <div className="w-1 h-1 rounded-full mt-0.5 animate-pulse"
-                      style={{ background: s.color }} />
-                  )}
-                </div>
-              )
-            })}
-          </div>
+        {/* Computer Use Shortcut */}
+        <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+          <button
+            onClick={() => setComputerUseOpen(!isComputerUseOpen)}
+            className={`nav-item w-full text-left ${isComputerUseOpen ? 'active' : ''}`}
+          >
+            <MonitorPlay size={13} />
+            {locale === 'my' ? 'Computer ကြည့်' : 'Computer Use'}
+            {isComputerUseOpen && (
+              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(124,58,237,0.12)', color: 'var(--accent-bright)' }}>
+                Live
+              </span>
+            )}
+          </button>
         </div>
       </nav>
 
       {/* Footer */}
-      <div className="p-3 border-t" style={{ borderColor: '#1e2035' }}>
-        <div className="text-[9px] text-slate-600 text-center">
-          Powered by <span className="text-violet-500 font-semibold">Pyae Sone</span>
+      <div className="p-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            {locale === 'my' ? '16 Agent Online' : '16 Agents Online'}
+          </span>
+        </div>
+        <div className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>
+          {locale === 'my' ? 'Gemini · SambaNova · GitHub' : 'Gemini · SambaNova · GitHub'}
         </div>
       </div>
     </aside>

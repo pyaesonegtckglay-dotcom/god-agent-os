@@ -1,167 +1,170 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Filter, Plus, Bot, Activity, Zap } from 'lucide-react'
-type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string; description: string; tasks: number; color?: string; [key: string]: any }
-const AGENTS: Agent[] = [
-  { id: 'core', name: 'Core Space', status: 'active', icon: '🧠', role: 'Cognition', space: 'core', description: 'Planning & orchestration', tasks: 0 },
-  { id: 'browser', name: 'Browser Space', status: 'idle', icon: '🌐', role: 'Automation', space: 'browser', description: 'Web research & navigation', tasks: 0 },
-  { id: 'sandbox', name: 'Sandbox Space', status: 'idle', icon: '💻', role: 'Execution', space: 'sandbox', description: 'Code execution', tasks: 0 },
-  { id: 'coding', name: 'Coding Space', status: 'idle', icon: '🔧', role: 'Execution', space: 'coding', description: 'Code generation', tasks: 0 },
-  { id: 'vision', name: 'Vision Space', status: 'idle', icon: '👁️', role: 'Visual Intelligence', space: 'vision', description: 'UI & image analysis', tasks: 0 },
-  { id: 'debug', name: 'Debug Space', status: 'idle', icon: '🐛', role: 'Repair', space: 'debug', description: 'Error analysis', tasks: 0 },
-  { id: 'deploy', name: 'Deploy Space', status: 'idle', icon: '🚀', role: 'Automation', space: 'deploy', description: 'Cloud deployments', tasks: 0 },
-  { id: 'communication', name: 'Comm Space', status: 'idle', icon: '💬', role: 'Automation', space: 'communication', description: 'Docs & messaging', tasks: 0 },
-]
-import { getStatusColor, cn } from '@/lib/utils'
+import { RefreshCw, Loader, Bot, Play, CheckCircle, XCircle } from 'lucide-react'
+import { getAgents, runAgent } from '@/lib/api'
+import { useAppStore } from '@/store/useAppStore'
 
-const STATUS_FILTERS = ['All', 'Active', 'Processing', 'Idle', 'Error']
+interface AgentInfo {
+  name: string
+  available: boolean
+  class: string | null
+}
 
-function AgentDetailCard({ agent }: { agent: Agent }) {
-  const sc = getStatusColor(agent.status)
-  return (
-    <motion.div layout className="card p-5 relative overflow-hidden group">
-      <div className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: `linear-gradient(90deg, ${agent.color}, transparent)` }} />
-
-      <div className="flex items-start gap-4 mb-4">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
-          style={{ background: `${agent.color}15`, border: `1px solid ${agent.color}25` }}>
-          {agent.icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-white">{agent.name}</h3>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-              style={{ background: `${sc}15`, color: sc }}>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: sc }} />
-              {agent.status}
-            </div>
-          </div>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>{agent.role}</p>
-          <p className="text-xs mt-2 text-slate-500">{agent.lastAction} · {agent.lastActionTime}</p>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-slate-500 mb-0.5">Tasks</div>
-          <div className="text-xl font-bold text-white">{agent.tasks}</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-slate-500">Efficiency</span>
-            <span className="text-xs font-bold" style={{ color: agent.color }}>{agent.efficiency}%</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${agent.efficiency}%`, background: `linear-gradient(90deg, ${agent.color}60, ${agent.color})` }} />
-          </div>
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-slate-500">Uptime</span>
-            <span className="text-xs font-bold text-cyan-400">{agent.uptime}%</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${agent.uptime}%`, background: 'linear-gradient(90deg, #22d3ee60, #22d3ee)' }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-2 mt-4">
-        <button className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-90"
-          style={{ background: `${agent.color}18`, border: `1px solid ${agent.color}30`, color: agent.color }}>
-          View Details
-        </button>
-        <button className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-90"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
-          Assign Task
-        </button>
-      </div>
-    </motion.div>
-  )
+const AGENT_META: Record<string, { icon: string; desc: string; color: string; descMy: string }> = {
+  chat:        { icon: '💬', desc: 'Conversation & clarification',   descMy: 'စကားပြော',            color: '#22d3ee' },
+  planner:     { icon: '📋', desc: 'Task decomposition & planning',  descMy: 'အစီအစဥ်ချ',           color: '#a78bfa' },
+  coding:      { icon: '⚡', desc: 'Production code generation',     descMy: 'Code ရေးရန်',          color: '#34d399' },
+  debug:       { icon: '🐛', desc: 'Self-healing error resolution',  descMy: 'Error ဖြေရှင်း',      color: '#ef4444' },
+  browser:     { icon: '🌐', desc: 'Web research & scraping',        descMy: 'Web ဆိုင်ရာ',          color: '#60a5fa' },
+  file:        { icon: '📁', desc: 'File system & project scaffold', descMy: 'ဖိုင် စီမံ',           color: '#fbbf24' },
+  git:         { icon: '🔀', desc: 'Git ops & GitHub PR creation',   descMy: 'Git လုပ်ဆောင်',        color: '#fb923c' },
+  test:        { icon: '🧪', desc: 'Auto test generation',           descMy: 'Test ဖန်တီး',           color: '#84cc16' },
+  vision:      { icon: '👁️', desc: 'Design-to-code UI generation',   descMy: 'UI ဒီဇိုင်း',         color: '#f472b6' },
+  sandbox:     { icon: '🔧', desc: 'Isolated code execution',        descMy: 'Code run',             color: '#f59e0b' },
+  deploy:      { icon: '🚀', desc: 'Auto-deploy to cloud',           descMy: 'Deploy လုပ်',          color: '#a855f7' },
+  connector:   { icon: '🔌', desc: 'External integrations',          descMy: 'ချိတ်ဆက်',            color: '#06b6d4' },
+  memory:      { icon: '💾', desc: 'Long-term context storage',      descMy: 'မှတ်ဉာဏ်',            color: '#818cf8' },
+  workflow:    { icon: '⚙️', desc: 'n8n workflow automation',        descMy: 'Workflow',             color: '#c084fc' },
+  reasoning:   { icon: '🧠', desc: 'Deep reasoning & analysis',      descMy: 'ခွဲခြမ်းစိတ်ဖြာ',    color: '#6366f1' },
+  ui:          { icon: '🎨', desc: 'Real-time UI state management',  descMy: 'UI စီမံ',              color: '#f472b6' },
+  orchestrator:{ icon: '🎭', desc: 'Central orchestrator (brain)',   descMy: 'ဦးဆောင်',             color: '#7c3aed' },
 }
 
 export default function AgentsPage() {
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('All')
+  const { locale, addComputerUseStep } = useAppStore()
+  const [agents, setAgents] = useState<AgentInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<Record<string, string>>({})
 
-  const filtered = AGENTS.filter(a =>
-    (statusFilter === 'All' || a.status === statusFilter.toLowerCase()) &&
-    (search === '' || a.name.toLowerCase().includes(search.toLowerCase()))
-  )
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await getAgents()
+      setAgents(data.agents || [])
+    } catch {
+      // Show placeholder if backend offline
+      setAgents(Object.keys(AGENT_META).filter(k => k !== 'orchestrator').map(name => ({
+        name,
+        available: false,
+        class: null,
+      })))
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const activeCount = AGENTS.filter(a => a.status === 'active').length
-  const processingCount = AGENTS.filter(a => a.status === 'processing').length
+  useEffect(() => { load() }, [])
+
+  const testAgent = async (agentName: string) => {
+    setRunning(agentName)
+    addComputerUseStep({ type: 'executing', title: `Testing ${agentName} agent...`, status: 'running' })
+    try {
+      const result = await runAgent(agentName, 'Hello! Give me a one-sentence description of your capabilities.', 'test-session')
+      setTestResult(prev => ({ ...prev, [agentName]: result.result?.slice(0, 150) || 'OK' }))
+      addComputerUseStep({ type: 'complete', title: `${agentName} agent responded`, status: 'done' })
+    } catch (e) {
+      setTestResult(prev => ({ ...prev, [agentName]: `Error: ${(e as Error).message?.slice(0, 100)}` }))
+      addComputerUseStep({ type: 'error', title: `${agentName} test failed`, status: 'error' })
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  const onlineCount = agents.filter(a => a.available).length
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Bot size={22} className="text-purple-400" /> Agent Fleet
+            <Bot size={20} style={{ color: 'var(--accent-bright)' }} />
+            {locale === 'my' ? 'Agent များ (16)' : 'Agent Fleet (16)'}
           </h1>
-          <p className="text-sm mt-1 text-slate-500">
-            {activeCount} active · {processingCount} processing · {AGENTS.length} total agents deployed
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+            {locale === 'my'
+              ? `${onlineCount}/16 online · Manus+Devin+Genspark combined`
+              : `${onlineCount}/16 online · Manus + Devin + Genspark combined`}
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', boxShadow: '0 0 20px rgba(124,58,237,0.3)' }}>
-          <Plus size={15} /> Deploy Agent
+        <button onClick={load} className="btn btn-secondary text-xs" disabled={loading}>
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          {locale === 'my' ? 'ပြန်စစ်' : 'Refresh'}
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Active', value: activeCount, color: '#22c55e' },
-          { label: 'Processing', value: processingCount, color: '#f59e0b' },
-          { label: 'Idle', value: AGENTS.filter(a => a.status === 'idle').length, color: '#94a3b8' },
-          { label: 'Total Tasks', value: AGENTS.reduce((acc, a) => acc + a.tasks, 0), color: '#6366f1' },
-        ].map(stat => (
-          <div key={stat.label} className="card p-4 text-center">
-            <div className="text-2xl font-bold text-white">{stat.value}</div>
-            <div className="text-xs mt-1 font-medium" style={{ color: stat.color }}>{stat.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Search & Filter */}
-      <div className="flex gap-3 mb-6">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search agents…"
-            className="cmd-input w-full pl-9 pr-4 py-2.5 text-sm" />
+      {loading ? (
+        <div className="flex items-center justify-center h-40">
+          <Loader size={20} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
         </div>
-        <div className="flex gap-2">
-          {STATUS_FILTERS.map(f => (
-            <button key={f} onClick={() => setStatusFilter(f)}
-              className={cn('px-3 py-2 rounded-xl text-xs font-semibold transition-all',
-                statusFilter === f
-                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
-                  : 'text-slate-500 hover:text-slate-300 border border-transparent hover:border-white/10'
-              )}>
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {agents.map((agent, i) => {
+            const meta = AGENT_META[agent.name] || { icon: '🤖', desc: agent.class || agent.name, color: '#7c3aed', descMy: agent.name }
+            const result = testResult[agent.name]
+            return (
+              <motion.div
+                key={agent.name}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="card p-4"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                      style={{ background: `${meta.color}12`, border: `1px solid ${meta.color}20` }}>
+                      {meta.icon}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm text-white capitalize">{agent.name}</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {locale === 'my' ? meta.descMy : meta.desc}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {agent.available ? (
+                      <CheckCircle size={14} style={{ color: '#22c55e' }} />
+                    ) : (
+                      <XCircle size={14} style={{ color: '#f87171' }} />
+                    )}
+                  </div>
+                </div>
 
-      {/* Grid */}
-      <motion.div layout className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtered.map((agent, i) => (
-          <motion.div key={agent.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}>
-            <AgentDetailCard agent={agent} />
-          </motion.div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-3 text-center py-16 text-slate-600">No agents match the filter</div>
-        )}
-      </motion.div>
+                {result && (
+                  <div className="text-[11px] p-2 rounded-lg mb-3 leading-relaxed"
+                    style={{ background: 'var(--surface-3)', color: result.startsWith('Error') ? '#f87171' : '#86efac' }}>
+                    {result}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${agent.available ? 'bg-green-400 animate-pulse' : 'bg-slate-600'}`} />
+                    <span className="text-[10px]" style={{ color: agent.available ? '#4ade80' : 'var(--text-muted)' }}>
+                      {agent.available ? (locale === 'my' ? 'Online' : 'Online') : (locale === 'my' ? 'Offline' : 'Offline')}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => testAgent(agent.name)}
+                    disabled={!agent.available || running === agent.name}
+                    className="btn btn-secondary text-[11px] py-1 px-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {running === agent.name ? (
+                      <><Loader size={10} style={{ animation: 'spin 1s linear infinite' }} /> Testing...</>
+                    ) : (
+                      <><Play size={10} /> {locale === 'my' ? 'စမ်းသပ်' : 'Test'}</>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
