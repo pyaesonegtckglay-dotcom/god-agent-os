@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Execution Layer — Code generation, file editing, refactoring, dependency handling, and code transf
+short_description: Coding Worker Space — Execution Layer
 ---
 
 # Coding Worker Space

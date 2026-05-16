@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Execution Layer — Shell commands, package installs, build tools, and process monitoring.
+short_description: Terminal Worker Space — Execution Layer
 ---
 
 # Terminal Worker Space

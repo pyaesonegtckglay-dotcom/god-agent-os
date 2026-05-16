@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Memory + Knowledge Layer — Vector DB, execution history, learned fixes, project memory, and long-term state
+short_description: Memory Worker Space — Memory + Knowledge Layer
 ---
 
 # Memory Worker Space

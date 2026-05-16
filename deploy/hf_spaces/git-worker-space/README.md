@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Deployment Layer — Commits, branching, diffs, merges, and repository workflow operations.
+short_description: Git Worker Space — Deployment Layer
 ---
 
 # Git Worker Space

@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Coordination Layer — Redis PubSub, NATS, RabbitMQ, and event streams.
+short_description: Eventbus Space — Coordination Layer
 ---
 
 # Eventbus Space

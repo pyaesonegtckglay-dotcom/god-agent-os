@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Execution Layer — Isolated execution, runtime sandboxing, subprocesses, environment resets, and li
+short_description: Sandbox Worker Space — Execution Layer
 ---
 
 # Sandbox Worker Space

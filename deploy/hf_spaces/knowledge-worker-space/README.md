@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Memory + Knowledge Layer — Docs retrieval, semantic search, RAG pipelines, and indexed repositories.
+short_description: Knowledge Worker Space — Memory + Knowledge Layer
 ---
 
 # Knowledge Worker Space

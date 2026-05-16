@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Monitoring Layer — Logs, metrics, tracing, agent monitoring, and runtime analytics.
+short_description: Observability Space — Monitoring Layer
 ---
 
 # Observability Space

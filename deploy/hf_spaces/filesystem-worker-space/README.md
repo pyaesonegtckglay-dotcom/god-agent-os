@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Execution Layer — File writes, project trees, artifact management, and storage operations.
+short_description: Filesystem Worker Space — Execution Layer
 ---
 
 # Filesystem Worker Space

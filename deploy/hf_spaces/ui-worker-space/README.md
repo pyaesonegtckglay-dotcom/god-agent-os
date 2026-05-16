@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Browser + UI Intelligence — Frontend generation, design systems, responsive layouts, component consistency, 
+short_description: UI Worker Space — Browser + UI Intelligence
 ---
 
 # UI Worker Space

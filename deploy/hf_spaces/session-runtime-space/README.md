@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Session Layer — User sessions, mission isolation, runtime persistence, and checkpointing.
+short_description: Session Runtime Space — Session Layer
 ---
 
 # Session Runtime Space

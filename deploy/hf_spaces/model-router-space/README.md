@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Infrastructure Layer — GPT routing, Claude routing, fallback models, cost optimization, and model selec
+short_description: Model Router Space — Infrastructure Layer
 ---
 
 # Model Router Space

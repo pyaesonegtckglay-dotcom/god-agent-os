@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Core Cognitive Layer — System brain for orchestration, planning, reasoning, workflow control, mission s
+short_description: God Core Space — Core Cognitive Layer
 ---
 
 # God Core Space

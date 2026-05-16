@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Deployment Layer — GitHub, Supabase, APIs, and external integrations.
+short_description: Connector Worker Space — Deployment Layer
 ---
 
 # Connector Worker Space

@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Verification + Repair Layer — Error analysis, traceback parsing, repair strategies, and retry planning.
+short_description: Debug Worker Space — Verification + Repair Laye
 ---
 
 # Debug Worker Space

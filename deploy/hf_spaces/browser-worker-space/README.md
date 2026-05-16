@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Browser + UI Intelligence — Playwright automation, navigation, screenshots, and interaction testing.
+short_description: Browser Worker Space — Browser + UI Intelligence
 ---
 
 # Browser Worker Space

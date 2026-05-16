@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Verification + Repair Layer — Run tests, assertions, integration checks, and regression testing.
+short_description: Test Worker Space — Verification + Repair Laye
 ---
 
 # Test Worker Space

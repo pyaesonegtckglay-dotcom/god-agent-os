@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Verification + Repair Layer — Validate outputs, compare expectations, quality scoring, and mission verificatio
+short_description: Verification Worker Space — Verification + Repair Laye
 ---
 
 # Verification Worker Space

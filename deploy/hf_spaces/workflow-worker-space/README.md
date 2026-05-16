@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Coordination Layer — DAG execution, task queues, retries, scheduling, and background jobs.
+short_description: Workflow Worker Space — Coordination Layer
 ---
 
 # Workflow Worker Space

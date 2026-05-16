@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Deployment Layer — Vercel, Railway, Docker deploys, preview URLs, and CI/CD triggers.
+short_description: Deploy Worker Space — Deployment Layer
 ---
 
 # Deploy Worker Space

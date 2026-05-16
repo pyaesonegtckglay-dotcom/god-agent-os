@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Infrastructure Layer — Auth, API keys, rate limits, and permissions.
+short_description: Auth Gateway Space — Infrastructure Layer
 ---
 
 # Auth Gateway Space

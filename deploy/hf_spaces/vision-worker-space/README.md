@@ -6,7 +6,7 @@ colorTo: purple
 sdk: static
 pinned: false
 license: mit
-short_description: Browser + UI Intelligence — Screenshot analysis, OCR, layout detection, visual regression, and UI understand
+short_description: Vision Worker Space — Browser + UI Intelligence
 ---
 
 # Vision Worker Space
