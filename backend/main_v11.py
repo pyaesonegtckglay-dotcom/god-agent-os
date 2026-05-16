@@ -2,6 +2,14 @@
 🚀 GOD AGENT OS v11 — 100% Working Autonomous Engineering OS
 God Mode: Plan + Code + Debug + Deploy + Browse + Git + Memory
 Real streaming, real agents, real computer-use events
+
+FIXED BUGS:
+- TaskEngine constructor: only takes ws_manager (not ai_router)
+- init_db: no argument needed
+- task_engine.run() → task_engine.start()
+- ws_manager.emit_task() → ws_manager.emit()
+- connector_manager.initialize() → not needed (sync init)
+- WebSocket: connect(websocket, session_id) vs connect(websocket, room)
 """
 
 import asyncio
@@ -74,7 +82,6 @@ orchestrator: GodAgentOrchestratorV7 = None
 connector_manager: ConnectorManager = None
 
 # ─── Computer-Use Event Stream (Manus-style) ──────────────────────────────────
-# Each session has a list of computer-use steps shown in UI
 computer_use_sessions: Dict[str, List[Dict]] = {}
 
 
@@ -89,7 +96,6 @@ def add_computer_use_step(session_id: str, step_type: str, data: Dict):
         "timestamp": time.time(),
         "status": "running",
     })
-    # Keep last 100 steps
     computer_use_sessions[session_id] = computer_use_sessions[session_id][-100:]
 
 
@@ -99,9 +105,8 @@ async def lifespan(app: FastAPI):
 
     log.info("🚀 God Agent OS v11 starting up...")
 
-    # Initialize DB
-    db_path = os.environ.get("DB_PATH", "/tmp/god_agent_v11.db")
-    await init_db(db_path)
+    # Initialize DB (no arguments needed)
+    await init_db()
 
     # Initialize AI Router
     ai_router = AIRouterV10()
@@ -109,8 +114,8 @@ async def lifespan(app: FastAPI):
     # WebSocket Manager
     ws_manager = WebSocketManager()
 
-    # Task Engine
-    task_engine = TaskEngine(ws_manager, ai_router)
+    # Task Engine (only takes ws_manager — NOT ai_router)
+    task_engine = TaskEngine(ws_manager)
 
     # Agent Fleet
     orchestrator = GodAgentOrchestratorV7(ws_manager, ai_router)
@@ -135,9 +140,8 @@ async def lifespan(app: FastAPI):
     for name, agent in agents_map.items():
         orchestrator.register_agent(name, agent)
 
-    # Connector Manager
+    # Connector Manager (sync init — no await needed)
     connector_manager = ConnectorManager()
-    await connector_manager.initialize()
 
     # Attach to app state
     app.state.ws_manager = ws_manager
@@ -146,13 +150,14 @@ async def lifespan(app: FastAPI):
     app.state.orchestrator = orchestrator
     app.state.connector_manager = connector_manager
 
-    # Start task engine
-    asyncio.create_task(task_engine.run())
+    # Start task engine using start() method (not run())
+    asyncio.create_task(task_engine.start())
 
     log.info("✅ God Agent OS v11 ready!", agents=len(agents_map))
     yield
 
     log.info("Shutting down God Agent OS v11...")
+    await task_engine.stop()
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────
@@ -191,7 +196,8 @@ app.include_router(github.router, prefix="/api/v1/github", tags=["github"])
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    await ws_manager.connect(websocket, session_id)
+    # ws_manager.connect uses room-based system, use session_id as room
+    await ws_manager.connect(websocket, f"chat:{session_id}")
     try:
         while True:
             data = await websocket.receive_json()
@@ -201,14 +207,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 await websocket.send_json({"type": "pong", "ts": time.time()})
 
             elif event_type == "message":
-                # Real-time chat/task via WebSocket
                 message = data.get("message", "")
                 task_id = uuid.uuid4().hex[:12]
-                await ws_manager.emit_task(session_id, "task_start", {
+                # emit uses room-based broadcast
+                await ws_manager.emit_chat(session_id, "task_start", {
                     "task_id": task_id,
                     "message": message[:100],
                 })
-                # Run in background
                 asyncio.create_task(
                     _run_ws_task(message, task_id, session_id)
                 )
@@ -216,10 +221,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             elif event_type == "stop":
                 task_id = data.get("task_id", "")
                 if task_id:
-                    task_engine.cancel(task_id)
+                    await task_engine.cancel(task_id)
 
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket, session_id)
+        ws_manager.disconnect(websocket, f"chat:{session_id}")
 
 
 async def _run_ws_task(message: str, task_id: str, session_id: str):
@@ -230,12 +235,12 @@ async def _run_ws_task(message: str, task_id: str, session_id: str):
             task_id=task_id,
             session_id=session_id,
         )
-        await ws_manager.emit_task(session_id, "task_complete", {
+        await ws_manager.emit_chat(session_id, "task_complete", {
             "task_id": task_id,
             "result": result[:2000] if result else "",
         })
     except Exception as e:
-        await ws_manager.emit_task(session_id, "task_error", {
+        await ws_manager.emit_chat(session_id, "task_error", {
             "task_id": task_id,
             "error": str(e),
         })
@@ -283,7 +288,6 @@ async def orchestrate_goal(request: Request):
 
     task_id = uuid.uuid4().hex[:12]
 
-    # Add computer-use step
     add_computer_use_step(session_id, "thinking", {
         "message": f"Processing: {message[:100]}",
         "task_id": task_id,
@@ -377,31 +381,31 @@ async def list_agents():
     return {"agents": agents_list, "total": len(agents_list)}
 
 
-# ─── Spaces Status (Real 22-space status) ────────────────────────────────────
+# ─── Spaces Status ────────────────────────────────────────────────────────────
 
 SPACE_DEFS = [
-    {"id": "god-core", "name": "God Core Space", "role": "orchestration", "agent": "orchestrator", "icon": "🧠"},
-    {"id": "coding", "name": "Coding Worker", "role": "code_generation", "agent": "coding", "icon": "⚡"},
-    {"id": "sandbox", "name": "Sandbox Worker", "role": "execution", "agent": "sandbox", "icon": "🔧"},
-    {"id": "terminal", "name": "Terminal Worker", "role": "execution", "agent": "sandbox", "icon": "🖥️"},
-    {"id": "filesystem", "name": "FileSystem Worker", "role": "files", "agent": "file", "icon": "📁"},
-    {"id": "browser", "name": "Browser Worker", "role": "research", "agent": "browser", "icon": "🌐"},
-    {"id": "vision", "name": "Vision Worker", "role": "ui_gen", "agent": "vision", "icon": "👁️"},
-    {"id": "ui", "name": "UI Worker", "role": "ui", "agent": "ui", "icon": "🎨"},
-    {"id": "debug", "name": "Debug Worker", "role": "debugging", "agent": "debug", "icon": "🐛"},
-    {"id": "test", "name": "Test Worker", "role": "testing", "agent": "test", "icon": "🧪"},
-    {"id": "verification", "name": "Verification Worker", "role": "qa", "agent": "test", "icon": "✅"},
-    {"id": "git", "name": "Git Worker", "role": "git", "agent": "git", "icon": "🔀"},
-    {"id": "deploy", "name": "Deploy Worker", "role": "deployment", "agent": "deploy", "icon": "🚀"},
-    {"id": "connector", "name": "Connector Worker", "role": "integration", "agent": "connector", "icon": "🔌"},
-    {"id": "memory", "name": "Memory Worker", "role": "memory", "agent": "memory", "icon": "💾"},
-    {"id": "knowledge", "name": "Knowledge Worker", "role": "knowledge", "agent": "memory", "icon": "📚"},
-    {"id": "workflow", "name": "Workflow Worker", "role": "automation", "agent": "workflow", "icon": "⚙️"},
-    {"id": "eventbus", "name": "Event Bus", "role": "events", "agent": None, "icon": "📡"},
-    {"id": "model-router", "name": "Model Router", "role": "ai_routing", "agent": None, "icon": "🤖"},
-    {"id": "observability", "name": "Observability", "role": "monitoring", "agent": None, "icon": "📊"},
-    {"id": "session-runtime", "name": "Session Runtime", "role": "sessions", "agent": None, "icon": "⏱️"},
-    {"id": "auth-gateway", "name": "Auth Gateway", "role": "auth", "agent": None, "icon": "🔐"},
+    {"id": "god-core",        "name": "God Core Space",       "role": "orchestration",  "agent": "orchestrator", "icon": "🧠"},
+    {"id": "coding",          "name": "Coding Worker",         "role": "code_generation","agent": "coding",       "icon": "⚡"},
+    {"id": "sandbox",         "name": "Sandbox Worker",        "role": "execution",      "agent": "sandbox",      "icon": "🔧"},
+    {"id": "terminal",        "name": "Terminal Worker",       "role": "execution",      "agent": "sandbox",      "icon": "🖥️"},
+    {"id": "filesystem",      "name": "FileSystem Worker",     "role": "files",          "agent": "file",         "icon": "📁"},
+    {"id": "browser",         "name": "Browser Worker",        "role": "research",       "agent": "browser",      "icon": "🌐"},
+    {"id": "vision",          "name": "Vision Worker",         "role": "ui_gen",         "agent": "vision",       "icon": "👁️"},
+    {"id": "ui",              "name": "UI Worker",             "role": "ui",             "agent": "ui",           "icon": "🎨"},
+    {"id": "debug",           "name": "Debug Worker",          "role": "debugging",      "agent": "debug",        "icon": "🐛"},
+    {"id": "test",            "name": "Test Worker",           "role": "testing",        "agent": "test",         "icon": "🧪"},
+    {"id": "verification",    "name": "Verification Worker",   "role": "qa",             "agent": "test",         "icon": "✅"},
+    {"id": "git",             "name": "Git Worker",            "role": "git",            "agent": "git",          "icon": "🔀"},
+    {"id": "deploy",          "name": "Deploy Worker",         "role": "deployment",     "agent": "deploy",       "icon": "🚀"},
+    {"id": "connector",       "name": "Connector Worker",      "role": "integration",    "agent": "connector",    "icon": "🔌"},
+    {"id": "memory",          "name": "Memory Worker",         "role": "memory",         "agent": "memory",       "icon": "💾"},
+    {"id": "knowledge",       "name": "Knowledge Worker",      "role": "knowledge",      "agent": "memory",       "icon": "📚"},
+    {"id": "workflow",        "name": "Workflow Worker",        "role": "automation",     "agent": "workflow",     "icon": "⚙️"},
+    {"id": "eventbus",        "name": "Event Bus",             "role": "events",         "agent": None,           "icon": "📡"},
+    {"id": "model-router",    "name": "Model Router",          "role": "ai_routing",     "agent": None,           "icon": "🤖"},
+    {"id": "observability",   "name": "Observability",         "role": "monitoring",     "agent": None,           "icon": "📊"},
+    {"id": "session-runtime", "name": "Session Runtime",       "role": "sessions",       "agent": None,           "icon": "⏱️"},
+    {"id": "auth-gateway",    "name": "Auth Gateway",          "role": "auth",           "agent": None,           "icon": "🔐"},
 ]
 
 
@@ -415,7 +419,7 @@ async def get_spaces():
         spaces_status.append({
             **space,
             "status": "active" if (agent is not None or agent_name is None) else "inactive",
-            "online": True,  # Running in this backend
+            "online": True,
             "backend": "god-agent-os-v11",
             "tasks_completed": 0,
         })
