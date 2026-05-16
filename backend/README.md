@@ -1,5 +1,5 @@
 ---
-title: God Agent OS v9 Backend
+title: God Agent OS v10 Backend
 emoji: 🤖
 colorFrom: purple
 colorTo: indigo
@@ -9,35 +9,22 @@ license: mit
 app_port: 7860
 ---
 
-# GOD AGENT OS v9 — Backend API
-**Space-Role Architecture | General Autonomous Agent OS**
+# GOD AGENT OS v10 — Backend API
+**Distributed 22-Space Architecture | Autonomous Agent OS**
 *Powered by Pyae Sone*
 
-## Architecture
+## Runtime Overview
+- 22 distributed worker spaces
+- God Core Space orchestration
+- KeyPool routing for Gemini, SambaNova, and GitHub model endpoints
+- WebSocket + REST control plane
+- Backward-compatible legacy agent fleet
 
-```
-Agent Kernel (v9)
-├── Core Space        — Planning & Orchestration
-├── Browser Space     — Web Research & Navigation  
-├── Sandbox Space     — Code Execution
-├── Coding Space      — Code Generation
-├── Vision Space      — UI Design & Image Analysis
-├── Debug Space       — Error Analysis & Self-Healing
-├── Deploy Space      — Cloud Deployments
-└── Communication     — Docs & Messaging
-```
-
-## Roles
-- **Cognition** — The Thinker
-- **Automation** — The Operator
-- **Execution** — The Doer
-- **Repair** — The Fixer
-- **Visual Intelligence** — The Observer
-
-## API Endpoints
-- `GET /` — System status
-- `GET /api/v1/spaces` — List all Spaces
-- `POST /api/v1/spaces/{name}/execute` — Execute in Space
-- `POST /api/v1/kernel/orchestrate` — Main orchestration
-- `WS /ws/chat/{session_id}` — Real-time chat
+## Primary APIs
+- `GET /` — system runtime summary
+- `GET /api/v1/spaces` — list all worker spaces
+- `POST /api/v1/spaces/{name}/execute` — execute in a worker space
+- `POST /api/v1/kernel/orchestrate` — main orchestration endpoint
+- `GET /api/v1/ai/pool-status` — key pool visibility
+- `WS /ws/chat/{session_id}` — live orchestration channel
 - `GET /api/docs` — Swagger UI

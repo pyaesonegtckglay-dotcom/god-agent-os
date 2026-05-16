@@ -18,15 +18,15 @@ import ConnectorsPage from '@/components/pages/ConnectorsPage'
 import { useAppStore } from '@/store/useAppStore'
 
 const PAGE_MAP = {
-  dashboard:  DashboardPage,
-  spaces:     SpacesPage,
-  agents:     AgentsPage,
-  tasks:      TasksPage,
-  memory:     MemoryPage,
-  knowledge:  KnowledgePage,
-  workflows:  WorkflowsPage,
-  analytics:  AnalyticsPage,
-  settings:   SettingsPage,
+  dashboard: DashboardPage,
+  spaces: SpacesPage,
+  agents: AgentsPage,
+  tasks: TasksPage,
+  memory: MemoryPage,
+  knowledge: KnowledgePage,
+  workflows: WorkflowsPage,
+  analytics: AnalyticsPage,
+  settings: SettingsPage,
   connectors: ConnectorsPage,
 }
 
@@ -36,14 +36,14 @@ export default function GodAgentOS() {
   const [loadingStep, setLoadingStep] = useState(0)
 
   const loadingSteps = [
-    'Initializing Agent Kernel...',
-    'Loading 8 Spaces...',
-    'Registering 5 Roles...',
-    'Connecting AI Router...',
+    'Initializing God Core Space...',
+    'Loading 22 worker spaces...',
+    'Registering 5 cognitive roles...',
+    'Connecting model router...',
     'System Ready ✓',
   ]
 
-  useEffect(() => { 
+  useEffect(() => {
     setMounted(true)
     const interval = setInterval(() => {
       setLoadingStep(prev => {
@@ -57,54 +57,33 @@ export default function GodAgentOS() {
     return () => clearInterval(interval)
   }, [])
 
-  if (!mounted) return (
-    <div className="flex items-center justify-center h-screen" style={{ background: '#05060d' }}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="text-center"
-      >
-        {/* Logo */}
-        <div className="relative w-20 h-20 mx-auto mb-6">
-          <div className="absolute inset-0 rounded-2xl"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', filter: 'blur(12px)', opacity: 0.5 }} />
-          <div className="relative w-full h-full rounded-2xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
-            <Zap size={32} className="text-white" />
-          </div>
-        </div>
-        
-        <div className="text-2xl font-black text-white mb-1">GOD AGENT OS</div>
-        <div className="text-sm text-slate-500 mb-1">General Autonomous Agent OS</div>
-        <div className="text-xs text-violet-500 font-medium mb-6">Space-Role Architecture · v9.0</div>
-        
-        {/* Loading steps */}
-        <div className="space-y-1 mb-4">
-          {loadingSteps.map((step, i) => (
-            <div key={i} className={`text-xs transition-all duration-300 ${
-              i <= loadingStep ? 'text-slate-400' : 'text-slate-700'
-            }`}>
-              {i < loadingStep ? '✓' : i === loadingStep ? '▶' : '○'} {step}
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center h-screen" style={{ background: '#05060d' }}>
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
+          <div className="relative w-20 h-20 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', filter: 'blur(12px)', opacity: 0.5 }} />
+            <div className="relative w-full h-full rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
+              <Zap size={32} className="text-white" />
             </div>
-          ))}
-        </div>
-        
-        <div className="flex gap-2 justify-center">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="w-2 h-2 rounded-full bg-violet-500 animate-bounce"
-              style={{ animationDelay: `${i * 0.2}s` }} />
-          ))}
-        </div>
-        
-        <div className="mt-6 text-[10px] text-slate-700">
-          Powered by <span className="text-violet-600">Pyae Sone</span>
-        </div>
-      </motion.div>
-    </div>
-  )
+          </div>
+          <div className="text-2xl font-black text-white mb-1">GOD AGENT OS</div>
+          <div className="text-sm text-slate-500 mb-1">Distributed Autonomous Agent OS</div>
+          <div className="text-xs text-violet-500 font-medium mb-6">22 Worker Spaces · v10.0</div>
+          <div className="space-y-1 mb-4">
+            {loadingSteps.map((step, i) => (
+              <div key={i} className={`text-xs transition-all duration-300 ${i <= loadingStep ? 'text-slate-400' : 'text-slate-700'}`}>
+                {i < loadingStep ? '✓' : i === loadingStep ? '▶' : '○'} {step}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 justify-center">{[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: `${i * 0.2}s` }} />)}</div>
+        </motion.div>
+      </div>
+    )
+  }
 
   const PageComponent = PAGE_MAP[currentPage] || DashboardPage
-
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#05060d' }}>
       <Sidebar />
@@ -112,14 +91,7 @@ export default function GodAgentOS() {
         <TopBar />
         <main className="flex-1 overflow-hidden">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="h-full"
-            >
+            <motion.div key={currentPage} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }} className="h-full">
               <PageComponent />
             </motion.div>
           </AnimatePresence>

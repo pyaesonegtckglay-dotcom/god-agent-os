@@ -1,19 +1,20 @@
 import { create } from 'zustand'
+import { SPACE_CATALOG, type WorkerRole } from '@/lib/spaceCatalog'
 
 export type Page = 
-  | 'dashboard' 
+  | 'dashboard'
   | 'spaces'
-  | 'agents' 
-  | 'tasks' 
-  | 'memory' 
-  | 'knowledge' 
-  | 'workflows' 
-  | 'analytics' 
+  | 'agents'
+  | 'tasks'
+  | 'memory'
+  | 'knowledge'
+  | 'workflows'
+  | 'analytics'
   | 'settings'
   | 'connectors'
 
-export type Space = 'core' | 'browser' | 'sandbox' | 'coding' | 'vision' | 'debug' | 'deploy' | 'communication'
-export type Role = 'cognition' | 'automation' | 'execution' | 'repair' | 'visual_intelligence'
+export type Space = string
+export type Role = WorkerRole
 
 export interface SpaceStatus {
   name: Space
@@ -29,7 +30,7 @@ interface AppState {
   activeSpace: Space | null
   currentRole: Role
   sidebarOpen: boolean
-  spaces: Record<Space, SpaceStatus>
+  spaces: Record<string, SpaceStatus>
   setCurrentPage: (page: Page) => void
   setActiveSpace: (space: Space | null) => void
   setCurrentRole: (role: Role) => void
@@ -38,16 +39,19 @@ interface AppState {
   deactivateSpace: (space: Space) => void
 }
 
-const initialSpaces: Record<Space, SpaceStatus> = {
-  core:          { name: 'core',          active: false, taskCount: 0, lastActive: null, color: '#7c3aed', icon: '🧠' },
-  browser:       { name: 'browser',       active: false, taskCount: 0, lastActive: null, color: '#2563eb', icon: '🌐' },
-  sandbox:       { name: 'sandbox',       active: false, taskCount: 0, lastActive: null, color: '#059669', icon: '💻' },
-  coding:        { name: 'coding',        active: false, taskCount: 0, lastActive: null, color: '#d97706', icon: '🔧' },
-  vision:        { name: 'vision',        active: false, taskCount: 0, lastActive: null, color: '#db2777', icon: '👁️' },
-  debug:         { name: 'debug',         active: false, taskCount: 0, lastActive: null, color: '#dc2626', icon: '🐛' },
-  deploy:        { name: 'deploy',        active: false, taskCount: 0, lastActive: null, color: '#0891b2', icon: '🚀' },
-  communication: { name: 'communication', active: false, taskCount: 0, lastActive: null, color: '#7c3aed', icon: '💬' },
-}
+const initialSpaces: Record<string, SpaceStatus> = Object.fromEntries(
+  SPACE_CATALOG.map(space => [
+    space.id,
+    {
+      name: space.id,
+      active: false,
+      taskCount: 0,
+      lastActive: null,
+      color: space.color,
+      icon: space.icon,
+    },
+  ])
+)
 
 export const useAppStore = create<AppState>((set) => ({
   currentPage: 'dashboard',
@@ -67,18 +71,28 @@ export const useAppStore = create<AppState>((set) => ({
     spaces: {
       ...state.spaces,
       [space]: {
-        ...state.spaces[space],
+        ...(state.spaces[space] || {
+          name: space,
+          active: false,
+          taskCount: 0,
+          lastActive: null,
+          color: '#7c3aed',
+          icon: '⚙️',
+        }),
         active: true,
         lastActive: Date.now(),
-        taskCount: state.spaces[space].taskCount + 1,
-      }
-    }
+        taskCount: (state.spaces[space]?.taskCount || 0) + 1,
+      },
+    },
   })),
 
   deactivateSpace: (space) => set((state) => ({
     spaces: {
       ...state.spaces,
-      [space]: { ...state.spaces[space], active: false }
-    }
+      [space]: {
+        ...(state.spaces[space] || { name: space, taskCount: 0, lastActive: null, color: '#7c3aed', icon: '⚙️' }),
+        active: false,
+      },
+    },
   })),
 }))

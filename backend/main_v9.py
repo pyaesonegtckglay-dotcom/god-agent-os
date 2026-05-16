@@ -1,6 +1,5 @@
 """
-🚀 GOD AGENT OS v9 — General Autonomous Agent OS
-Space-Role Architecture: Core + Browser + Sandbox + Coding + Vision + Debug + Deploy + Communication
+🚀 GOD AGENT OS v10 — Distributed 22-Space Agent OS
 Powered by Pyae Sone
 """
 
@@ -32,10 +31,7 @@ from ai_router.router_v8 import AIRouterV8
 
 # ─── v9 Agent Kernel & Spaces ─────────────────────────────────────────────────
 from kernel.agent_kernel import AgentKernel
-from spaces import (
-    CoreSpace, BrowserSpace, SandboxSpace, CodingSpace,
-    VisionSpace, DebugSpace, DeploySpace, CommunicationSpace
-)
+from spaces import SPACE_CATALOG, build_all_spaces
 
 # ─── Legacy Agent Ecosystem (backward compatibility) ──────────────────────────
 from agents.orchestrator_v7 import GodAgentOrchestratorV7
@@ -81,20 +77,11 @@ connector_manager = ConnectorManager()
 
 
 def build_kernel() -> AgentKernel:
-    """Build and configure the v9 Agent Kernel with all Spaces."""
+    """Build and configure the distributed 22-space Agent Kernel."""
     kernel = AgentKernel(ws_manager=ws_manager, ai_router=ai_router)
-    
-    # Register all 8 Spaces
-    kernel.register_space("core",          CoreSpace(ws_manager, ai_router))
-    kernel.register_space("browser",       BrowserSpace(ws_manager, ai_router))
-    kernel.register_space("sandbox",       SandboxSpace(ws_manager, ai_router))
-    kernel.register_space("coding",        CodingSpace(ws_manager, ai_router))
-    kernel.register_space("vision",        VisionSpace(ws_manager, ai_router))
-    kernel.register_space("debug",         DebugSpace(ws_manager, ai_router))
-    kernel.register_space("deploy",        DeploySpace(ws_manager, ai_router))
-    kernel.register_space("communication", CommunicationSpace(ws_manager, ai_router))
-    
-    log.info("🧠 GOD AGENT OS v9 — Agent Kernel initialized", spaces=8)
+    for space_name, space_instance in build_all_spaces(ws_manager=ws_manager, ai_router=ai_router).items():
+        kernel.register_space(space_name, space_instance)
+    log.info("🧠 GOD AGENT OS distributed kernel initialized", spaces=len(SPACE_CATALOG))
     return kernel
 
 
@@ -128,25 +115,25 @@ orchestrator = build_legacy_orchestrator()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("🚀 Starting GOD AGENT OS v9 — Space-Role Architecture...")
+    log.info("🚀 Starting GOD AGENT OS v10 — Distributed 22-Space Architecture...")
     await init_db()
     await task_engine.start()
     asyncio.create_task(ws_manager.heartbeat_loop())
     stats = ai_router.get_stats()
     active = [name for name, s in stats.items() if s["available"]]
-    log.info("✅ GOD AGENT v9 — 8 Spaces + 16 Legacy Agents online")
+    log.info("✅ GOD AGENT v10 — 22 Spaces + 16 Legacy Agents online")
     log.info(f"🔑 Active AI providers: {active}")
     log.info("🌐 Routing: SambaNova → Gemini → OpenAI → Groq → Cerebras")
-    log.info("📦 Spaces: Core | Browser | Sandbox | Coding | Vision | Debug | Deploy | Communication")
+    log.info("📦 Spaces: distributed 22-space runtime online")
     yield
     log.info("🛑 Shutting down GOD AGENT OS v9...")
     await task_engine.stop()
 
 
 app = FastAPI(
-    title="🤖 GOD AGENT OS v9",
-    description="General Autonomous Agent OS — Space-Role Architecture | Powered by Pyae Sone",
-    version="9.0.0",
+    title="🤖 GOD AGENT OS v10",
+    description="Distributed 22-Space Autonomous Agent OS | Powered by Pyae Sone",
+    version="10.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -400,25 +387,25 @@ async def root():
     stats = ai_router.get_stats()
     active_providers = [name for name, s in stats.items() if s["available"]]
     return {
-        "name": "🤖 GOD AGENT OS v9",
-        "version": "9.0.0",
+        "name": "🤖 GOD AGENT OS v10",
+        "version": "10.0.0",
         "status": "operational",
         "mode": "general_autonomous_agent_os",
-        "description": "Space-Role Architecture | Powered by Pyae Sone",
-        "architecture": "Space-Role Paradigm",
+        "description": "Distributed 22-Space Architecture | Powered by Pyae Sone",
+        "architecture": "Distributed Worker Space Paradigm",
         "spaces": kernel_status_data["spaces"],
         "total_spaces": kernel_status_data["total_spaces"],
         "ai_providers": active_providers,
         "connectors": {"connected": cs["connected"], "total": cs["total"]},
         "docs": "/api/docs",
         "v9_features": [
-            "📦 8-Space Architecture: Core | Browser | Sandbox | Coding | Vision | Debug | Deploy | Communication",
+            "📦 22 distributed worker spaces across cognition, execution, verification, deployment, memory, coordination, monitoring, session, and infrastructure layers",
             "🎭 5 Cognitive Roles: Cognition | Automation | Execution | Repair | Visual Intelligence",
-            "🧠 Agent Kernel — generalized orchestration engine",
-            "🔑 KeyPool multi-key management (Gemini + SambaNova)",
-            "🔄 Automatic Space routing based on intent",
-            "💾 Context Manager — short-term + long-term memory",
-            "⚡ Backward compatible with v8 16-agent fleet",
+            "🧠 God Core Space orchestrates the worker fleet",
+            "🔑 KeyPool multi-key management (Gemini + SambaNova + GitHub)",
+            "🔄 Automatic worker-space routing based on intent",
+            "💾 Context Manager for session-scoped runtime state",
+            "⚡ Backward compatible with v8/v9 agent fleet",
             "🌐 Real-time streaming via WebSocket",
         ],
     }

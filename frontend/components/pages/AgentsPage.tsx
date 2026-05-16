@@ -2,40 +2,56 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Filter, Plus, Bot, Activity, Zap } from 'lucide-react'
-type Agent = { id: string; name: string; status: string; icon: string; role: string; space: string; description: string; tasks: number; color?: string; [key: string]: any }
-const AGENTS: Agent[] = [
-  { id: 'core', name: 'Core Space', status: 'active', icon: '🧠', role: 'Cognition', space: 'core', description: 'Planning & orchestration', tasks: 0 },
-  { id: 'browser', name: 'Browser Space', status: 'idle', icon: '🌐', role: 'Automation', space: 'browser', description: 'Web research & navigation', tasks: 0 },
-  { id: 'sandbox', name: 'Sandbox Space', status: 'idle', icon: '💻', role: 'Execution', space: 'sandbox', description: 'Code execution', tasks: 0 },
-  { id: 'coding', name: 'Coding Space', status: 'idle', icon: '🔧', role: 'Execution', space: 'coding', description: 'Code generation', tasks: 0 },
-  { id: 'vision', name: 'Vision Space', status: 'idle', icon: '👁️', role: 'Visual Intelligence', space: 'vision', description: 'UI & image analysis', tasks: 0 },
-  { id: 'debug', name: 'Debug Space', status: 'idle', icon: '🐛', role: 'Repair', space: 'debug', description: 'Error analysis', tasks: 0 },
-  { id: 'deploy', name: 'Deploy Space', status: 'idle', icon: '🚀', role: 'Automation', space: 'deploy', description: 'Cloud deployments', tasks: 0 },
-  { id: 'communication', name: 'Comm Space', status: 'idle', icon: '💬', role: 'Automation', space: 'communication', description: 'Docs & messaging', tasks: 0 },
-]
-import { getStatusColor, cn } from '@/lib/utils'
+import { Search, Plus, Bot } from 'lucide-react'
+import { SPACE_CATALOG } from '@/lib/spaceCatalog'
+import { cn, getStatusColor } from '@/lib/utils'
+
+type Agent = {
+  id: string
+  name: string
+  status: string
+  icon: string
+  role: string
+  space: string
+  description: string
+  tasks: number
+  color: string
+  efficiency: number
+  uptime: number
+  lastAction: string
+  lastActionTime: string
+}
+
+const AGENTS: Agent[] = SPACE_CATALOG.map((space, index) => ({
+  id: space.id,
+  name: space.name,
+  status: index === 0 ? 'active' : index < 4 ? 'processing' : 'idle',
+  icon: space.icon,
+  role: space.roles[0].replace('_', ' '),
+  space: space.id,
+  description: space.description,
+  tasks: index === 0 ? 4 : index < 4 ? 1 : 0,
+  color: space.color,
+  efficiency: 90 - (index % 7) * 4,
+  uptime: 99 - (index % 5),
+  lastAction: space.responsibilities[0],
+  lastActionTime: `${(index % 6) + 1}m ago`,
+}))
 
 const STATUS_FILTERS = ['All', 'Active', 'Processing', 'Idle', 'Error']
 
 function AgentDetailCard({ agent }: { agent: Agent }) {
-  const sc = getStatusColor(agent.status)
+  const statusColor = getStatusColor(agent.status)
   return (
     <motion.div layout className="card p-5 relative overflow-hidden group">
-      <div className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ background: `linear-gradient(90deg, ${agent.color}, transparent)` }} />
-
+      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, ${agent.color}, transparent)` }} />
       <div className="flex items-start gap-4 mb-4">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
-          style={{ background: `${agent.color}15`, border: `1px solid ${agent.color}25` }}>
-          {agent.icon}
-        </div>
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0" style={{ background: `${agent.color}15`, border: `1px solid ${agent.color}25` }}>{agent.icon}</div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-white">{agent.name}</h3>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-              style={{ background: `${sc}15`, color: sc }}>
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: sc }} />
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: `${statusColor}15`, color: statusColor }}>
+              <div className="w-1.5 h-1.5 rounded-full" style={{ background: statusColor }} />
               {agent.status}
             </div>
           </div>
@@ -47,37 +63,19 @@ function AgentDetailCard({ agent }: { agent: Agent }) {
           <div className="text-xl font-bold text-white">{agent.tasks}</div>
         </div>
       </div>
-
+      <p className="text-xs text-slate-400 mb-4">{agent.description}</p>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-slate-500">Efficiency</span>
-            <span className="text-xs font-bold" style={{ color: agent.color }}>{agent.efficiency}%</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${agent.efficiency}%`, background: `linear-gradient(90deg, ${agent.color}60, ${agent.color})` }} />
-          </div>
+          <div className="flex items-center justify-between mb-1.5"><span className="text-xs text-slate-500">Efficiency</span><span className="text-xs font-bold" style={{ color: agent.color }}>{agent.efficiency}%</span></div>
+          <div className="progress-bar"><div className="progress-fill" style={{ width: `${agent.efficiency}%`, background: `linear-gradient(90deg, ${agent.color}60, ${agent.color})` }} /></div>
         </div>
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-slate-500">Uptime</span>
-            <span className="text-xs font-bold text-cyan-400">{agent.uptime}%</span>
-          </div>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${agent.uptime}%`, background: 'linear-gradient(90deg, #22d3ee60, #22d3ee)' }} />
-          </div>
-        </div>
+          <div className="flex items-center justify-between mb-1.5"><span className="text-xs text-slate-500">Uptime</span><span className="text-xs font-bold text-cyan-400">{agent.uptime}%</span></div>
+          <div className="progress-bar"><div className="progress-fill" style={{ width: `${agent.uptime}%`, background: 'linear-gradient(90deg, #22d3ee60, #22d3ee)' }} /></div></div>
       </div>
-
       <div className="flex gap-2 mt-4">
-        <button className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-90"
-          style={{ background: `${agent.color}18`, border: `1px solid ${agent.color}30`, color: agent.color }}>
-          View Details
-        </button>
-        <button className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-90"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
-          Assign Task
-        </button>
+        <button className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-90" style={{ background: `${agent.color}18`, border: `1px solid ${agent.color}30`, color: agent.color }}>View Details</button>
+        <button className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all hover:opacity-90" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>Assign Task</button>
       </div>
     </motion.div>
   )
@@ -86,81 +84,44 @@ function AgentDetailCard({ agent }: { agent: Agent }) {
 export default function AgentsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
-
-  const filtered = AGENTS.filter(a =>
-    (statusFilter === 'All' || a.status === statusFilter.toLowerCase()) &&
-    (search === '' || a.name.toLowerCase().includes(search.toLowerCase()))
-  )
-
-  const activeCount = AGENTS.filter(a => a.status === 'active').length
-  const processingCount = AGENTS.filter(a => a.status === 'processing').length
+  const filtered = AGENTS.filter(agent => (statusFilter === 'All' || agent.status === statusFilter.toLowerCase()) && (search === '' || agent.name.toLowerCase().includes(search.toLowerCase())))
+  const activeCount = AGENTS.filter(agent => agent.status === 'active').length
+  const processingCount = AGENTS.filter(agent => agent.status === 'processing').length
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Bot size={22} className="text-purple-400" /> Agent Fleet
-          </h1>
-          <p className="text-sm mt-1 text-slate-500">
-            {activeCount} active · {processingCount} processing · {AGENTS.length} total agents deployed
-          </p>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Bot size={22} className="text-purple-400" /> Worker Fleet</h1>
+          <p className="text-sm mt-1 text-slate-500">{activeCount} active · {processingCount} processing · {AGENTS.length} total worker spaces deployed</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', boxShadow: '0 0 20px rgba(124,58,237,0.3)' }}>
-          <Plus size={15} /> Deploy Agent
-        </button>
+        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90" style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', boxShadow: '0 0 20px rgba(124,58,237,0.3)' }}><Plus size={15} /> Deploy Worker</button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Active', value: activeCount, color: '#22c55e' },
           { label: 'Processing', value: processingCount, color: '#f59e0b' },
-          { label: 'Idle', value: AGENTS.filter(a => a.status === 'idle').length, color: '#94a3b8' },
-          { label: 'Total Tasks', value: AGENTS.reduce((acc, a) => acc + a.tasks, 0), color: '#6366f1' },
-        ].map(stat => (
-          <div key={stat.label} className="card p-4 text-center">
-            <div className="text-2xl font-bold text-white">{stat.value}</div>
-            <div className="text-xs mt-1 font-medium" style={{ color: stat.color }}>{stat.label}</div>
-          </div>
-        ))}
+          { label: 'Idle', value: AGENTS.filter(agent => agent.status === 'idle').length, color: '#94a3b8' },
+          { label: 'Total Tasks', value: AGENTS.reduce((acc, agent) => acc + agent.tasks, 0), color: '#6366f1' },
+        ].map(stat => <div key={stat.label} className="card p-4 text-center"><div className="text-2xl font-bold text-white">{stat.value}</div><div className="text-xs mt-1 font-medium" style={{ color: stat.color }}>{stat.label}</div></div>)}
       </div>
 
-      {/* Search & Filter */}
       <div className="flex gap-3 mb-6">
         <div className="relative flex-1 max-w-sm">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search agents…"
-            className="cmd-input w-full pl-9 pr-4 py-2.5 text-sm" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search worker spaces…" className="cmd-input w-full pl-9 pr-4 py-2.5 text-sm" />
         </div>
         <div className="flex gap-2">
-          {STATUS_FILTERS.map(f => (
-            <button key={f} onClick={() => setStatusFilter(f)}
-              className={cn('px-3 py-2 rounded-xl text-xs font-semibold transition-all',
-                statusFilter === f
-                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
-                  : 'text-slate-500 hover:text-slate-300 border border-transparent hover:border-white/10'
-              )}>
-              {f}
-            </button>
+          {STATUS_FILTERS.map(filter => (
+            <button key={filter} onClick={() => setStatusFilter(filter)} className={cn('px-3 py-2 rounded-xl text-xs font-semibold transition-all', statusFilter === filter ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30' : 'text-slate-500 hover:text-slate-300 border border-transparent hover:border-white/10')}>{filter}</button>
           ))}
         </div>
       </div>
 
-      {/* Grid */}
       <motion.div layout className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtered.map((agent, i) => (
-          <motion.div key={agent.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}>
-            <AgentDetailCard agent={agent} />
-          </motion.div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-3 text-center py-16 text-slate-600">No agents match the filter</div>
-        )}
+        {filtered.map((agent, index) => <motion.div key={agent.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}><AgentDetailCard agent={agent} /></motion.div>)}
+        {filtered.length === 0 && <div className="col-span-3 text-center py-16 text-slate-600">No worker spaces match the filter</div>}
       </motion.div>
     </div>
   )

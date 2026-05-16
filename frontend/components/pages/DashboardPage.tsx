@@ -9,17 +9,9 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { createWebSocket } from '@/lib/api'
+import { SPACE_CATALOG } from '@/lib/spaceCatalog'
 
-const SPACES_CONFIG = [
-  { id: 'core',          name: 'Core Space',          icon: '🧠', color: '#7c3aed', desc: 'Planning & Orchestration',    role: 'cognition' },
-  { id: 'browser',       name: 'Browser Space',       icon: '🌐', color: '#2563eb', desc: 'Web Research & Navigation',   role: 'automation' },
-  { id: 'sandbox',       name: 'Sandbox Space',       icon: '💻', color: '#059669', desc: 'Code Execution & Testing',    role: 'execution' },
-  { id: 'coding',        name: 'Coding Space',        icon: '🔧', color: '#d97706', desc: 'Code Generation & Review',    role: 'execution' },
-  { id: 'vision',        name: 'Vision Space',        icon: '👁️', color: '#db2777', desc: 'UI Design & Image Analysis',  role: 'visual_intelligence' },
-  { id: 'debug',         name: 'Debug Space',         icon: '🐛', color: '#dc2626', desc: 'Error Analysis & Self-Heal',  role: 'repair' },
-  { id: 'deploy',        name: 'Deploy Space',        icon: '🚀', color: '#0891b2', desc: 'Cloud Deploy & CI/CD',        role: 'automation' },
-  { id: 'communication', name: 'Comm Space',          icon: '💬', color: '#8b5cf6', desc: 'Messaging & Documentation',   role: 'automation' },
-]
+const SPACES_CONFIG = SPACE_CATALOG
 
 const ROLES_CONFIG = [
   { id: 'cognition',          name: 'Cognition',          icon: '🧠', desc: 'The Thinker — Plans & Analyzes' },
@@ -316,8 +308,8 @@ export default function DashboardPage() {
         {/* Quick Prompts */}
         <div className="px-3 pb-2 flex gap-2 overflow-x-auto">
           {[
-            { text: '🌐 Search latest AI trends', space: 'browser' },
-            { text: '🔧 Write a Python API', space: 'coding' },
+            { text: '🌐 Research new AI infra patterns', space: 'browser-worker-space' },
+            { text: '🔧 Write a Python API', space: 'coding-worker-space' },
             { text: '💻 Run: print("Hello")', space: 'sandbox' },
             { text: '🚀 Generate Dockerfile', space: 'deploy' },
             { text: '🐛 Debug my error', space: 'debug' },
@@ -387,7 +379,7 @@ export default function DashboardPage() {
                   <div className="text-[10px] font-semibold" style={{ color: isActive ? s.color : '#475569' }}>
                     {s.name.split(' ')[0]}
                   </div>
-                  <div className="text-[8px] text-slate-600 mt-0.5">{s.desc}</div>
+                  <div className="text-[8px] text-slate-600 mt-0.5">{s.description}</div>
                   {spaceState?.taskCount > 0 && (
                     <div className="text-[8px] mt-0.5" style={{ color: s.color }}>
                       {spaceState.taskCount} tasks
