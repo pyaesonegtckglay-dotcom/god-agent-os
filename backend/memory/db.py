@@ -280,8 +280,8 @@ async def get_history(session_id: str, limit: int = 50) -> List[Dict]:
             return [dict(r) for r in rows]
 
 
-async def list_sessions(limit: int = 50):
-    """List recent sessions."""
+async def list_sessions(limit: int = 50) -> List[Dict]:
+    """List all sessions from the sessions table."""
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -289,3 +289,23 @@ async def list_sessions(limit: int = 50):
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
+
+
+async def upsert_session(session_id: str, project_id: str = "", user_id: str = "", metadata: dict = {}):
+    """Create or update a session record."""
+    now = time.time()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO sessions (id, project_id, user_id, metadata, created_at, last_active)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET last_active = ?, metadata = ?
+        """, (session_id, project_id, user_id, json.dumps(metadata), now, now, now, json.dumps(metadata)))
+        await db.commit()
+
+
+async def delete_session(session_id: str):
+    """Delete a session and its memories."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        await db.execute("DELETE FROM memory WHERE session_id = ?", (session_id,))
+        await db.commit()
