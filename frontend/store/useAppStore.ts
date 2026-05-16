@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { SPACE_CATALOG, type WorkerRole } from '@/lib/spaceCatalog'
 
 export type Page = 
+  | 'chat'
   | 'dashboard'
   | 'spaces'
   | 'agents'
@@ -54,7 +55,7 @@ const initialSpaces: Record<string, SpaceStatus> = Object.fromEntries(
 )
 
 export const useAppStore = create<AppState>((set) => ({
-  currentPage: 'dashboard',
+  currentPage: 'chat',
   activeSpace: null,
   currentRole: 'cognition',
   sidebarOpen: true,

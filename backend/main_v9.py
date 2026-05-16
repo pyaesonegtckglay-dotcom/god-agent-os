@@ -26,8 +26,8 @@ from api.websocket_manager import WebSocketManager
 from core.task_engine import TaskEngine
 from memory.db import init_db
 
-# ─── v8 AI Router (KeyPool-based, kept for compatibility) ─────────────────────
-from ai_router.router_v8 import AIRouterV8
+# ─── v10 AI Router (Gemini + SambaNova + GitHub KeyPool routing) ─────────────
+from ai_router.router_v10 import AIRouterV10 as AIRouterV8
 
 # ─── v9 Agent Kernel & Spaces ─────────────────────────────────────────────────
 from kernel.agent_kernel import AgentKernel

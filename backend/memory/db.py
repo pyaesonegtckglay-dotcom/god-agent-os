@@ -5,6 +5,7 @@ Handles tasks, memory, sessions, events
 
 import aiosqlite
 import os
+import pathlib
 import json
 import time
 from typing import Optional, List, Dict, Any
@@ -12,7 +13,15 @@ import structlog
 
 log = structlog.get_logger()
 
-DB_PATH = os.environ.get("DB_PATH", "/tmp/devin_agent.db")
+import pathlib
+
+# Use /data for HuggingFace persistent storage, fallback to /tmp for local dev
+_default_db = "/data/god_agent_os.db" if os.path.isdir("/data") else "/tmp/god_agent_os.db"
+DB_PATH = os.environ.get("DB_PATH", _default_db)
+
+# Ensure the directory exists before SQLite tries to open the file
+_db_dir = str(pathlib.Path(DB_PATH).parent)
+os.makedirs(_db_dir, exist_ok=True)
 
 
 async def get_db() -> aiosqlite.Connection:

@@ -1,9 +1,13 @@
-name: 🚀 Deploy God Agent OS v9
+name: 🚀 Deploy God Agent OS v10
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, genspark_ai_developer ]
   workflow_dispatch:
+
+env:
+  HF_SPACE: PYAE1994/autonomous-coding-system
+  HF_USER: pyaesonegtckglay-dotcom
 
 jobs:
   deploy-hf-backend:
@@ -18,6 +22,40 @@ jobs:
       - name: 📦 Install HF Hub CLI
         run: pip install huggingface_hub
 
+      - name: 🔐 Configure HF Space secrets via API
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          SAMBANOVA_KEY: ${{ secrets.SAMBANOVA_KEY }}
+          GITHUB_KEY: ${{ secrets.GITHUB_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          try:
+              from huggingface_hub import HfApi
+              token = os.environ.get("HF_TOKEN", "")
+              if not token:
+                  print("No HF_TOKEN — skipping secret push")
+                  exit(0)
+              api = HfApi(token=token)
+              repo_id = "PYAE1994/autonomous-coding-system"
+              secrets = {
+                  "GEMINI_KEY": os.environ.get("GEMINI_KEY", ""),
+                  "SAMBANOVA_KEY": os.environ.get("SAMBANOVA_KEY", ""),
+                  "GITHUB_KEY": os.environ.get("GITHUB_KEY", ""),
+                  "DB_PATH": "/data/god_agent_os.db",
+              }
+              for k, v in secrets.items():
+                  if v:
+                      try:
+                          api.add_space_secret(repo_id=repo_id, key=k, value=v)
+                          print(f"Set secret: {k}")
+                      except Exception as e:
+                          print(f"Secret {k}: {e}")
+          except Exception as e:
+              print(f"HF secrets: {e}")
+          EOF
+
       - name: 🚀 Push Backend to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -25,18 +63,19 @@ jobs:
           cd backend
           git config --global user.email "ci@godagentos.ai"
           git config --global user.name "God Agent OS CI"
-          
-          # Clone HF space
-          git clone https://pyaesonegtckglay-dotcom:$HF_TOKEN@huggingface.co/spaces/PYAE1994/autonomous-coding-system /tmp/hf-space || true
-          
-          # Copy backend files to HF space
-          cp -r . /tmp/hf-space/ 2>/dev/null || true
-          
+
+          git clone https://${{ env.HF_USER }}:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} /tmp/hf-space 2>/dev/null || \
+          git clone https://PYAE1994:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} /tmp/hf-space || true
+
+          rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
+            . /tmp/hf-space/ 2>/dev/null || cp -r . /tmp/hf-space/ 2>/dev/null || true
+
           cd /tmp/hf-space
           git add -A
-          git diff --staged --quiet || git commit -m "🚀 Deploy God Agent OS v9 backend"
-          git push https://pyaesonegtckglay-dotcom:$HF_TOKEN@huggingface.co/spaces/PYAE1994/autonomous-coding-system main 2>/dev/null || \
-          git push https://pyaesonegtckglay-dotcom:$HF_TOKEN@huggingface.co/spaces/PYAE1994/autonomous-coding-system HEAD:main || true
+          git diff --staged --quiet || git commit -m "Deploy God Agent OS v10 $(date '+%Y-%m-%d %H:%M')"
+          git push https://${{ env.HF_USER }}:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} HEAD:main 2>/dev/null || \
+          git push https://PYAE1994:${HF_TOKEN}@huggingface.co/spaces/${{ env.HF_SPACE }} HEAD:main || true
+          echo "HF Space deployment triggered"
 
   deploy-vercel-frontend:
     name: ▲ Deploy Frontend to Vercel
@@ -53,7 +92,7 @@ jobs:
       - name: 📦 Install Dependencies
         run: |
           cd frontend
-          npm ci
+          npm ci --legacy-peer-deps
 
       - name: 🏗️ Build Frontend
         env:
