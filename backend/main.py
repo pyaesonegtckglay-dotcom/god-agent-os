@@ -23,6 +23,10 @@ if _os.path.exists(_keys_file):
             if _line and "=" in _line and not _line.startswith("#"):
                 _k, _v = _line.split("=", 1)
                 _inject_key(_k.strip(), _v.strip())
+
+# ─── Pre-configure known service URLs (users can override via Connectors) ─────
+_inject_key("N8N_URL", "https://pyae1994-n8n-aiven-v1.hf.space")
+_inject_key("N8N_API_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3NjRiOWE5Yi05NWVlLTQ2N2EtOGZjNS00YmM0MTY2Nzg4NmYiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiYjk1NDAxOGUtNzlmZi00NDg2LWE4OTMtZjEzOTY5MTE4MGRkIiwiaWF0IjoxNzc2MDY0NDA0fQ.b-Q6NGk9uGT04K4DsJLbfH974U9phjnUfTYGZmW0hV4")
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -46,6 +50,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api.routes import tasks, chat, memory, github, health
 from api.routes import connectors, agents as agents_router
+from api.routes import n8n as n8n_router
 from api.websocket_manager import WebSocketManager
 from core.task_engine import TaskEngine
 from memory.db import init_db
@@ -173,6 +178,7 @@ app.include_router(memory.router,             prefix="/api/v1/memory",       tag
 app.include_router(github.router,             prefix="/api/v1/github",       tags=["github"])
 app.include_router(connectors.router,         prefix="/api/v1/connectors",   tags=["connectors"])
 app.include_router(agents_router.router,      prefix="/api/v1/agents",       tags=["agents"])
+app.include_router(n8n_router.router,         prefix="/api/v1/n8n",          tags=["n8n"])
 
 
 # ─── WebSocket Endpoints ───────────────────────────────────────────────────────
