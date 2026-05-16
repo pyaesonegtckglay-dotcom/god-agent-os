@@ -1,115 +1,171 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Play, RefreshCw } from 'lucide-react'
+import { RefreshCw, ExternalLink, CheckCircle, XCircle, Loader, Zap } from 'lucide-react'
+import { getSpaces } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
-import { SPACE_CATALOG } from '@/lib/spaceCatalog'
+
+interface SpaceInfo {
+  id: string
+  name: string
+  role: string
+  agent: string | null
+  icon: string
+  status: 'active' | 'inactive'
+  online: boolean
+  backend: string
+  tasks_completed: number
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  orchestration: '#a78bfa',
+  code_generation: '#34d399',
+  execution: '#f59e0b',
+  files: '#60a5fa',
+  research: '#22d3ee',
+  ui_gen: '#f472b6',
+  ui: '#f472b6',
+  debugging: '#ef4444',
+  testing: '#84cc16',
+  qa: '#4ade80',
+  git: '#fb923c',
+  deployment: '#a855f7',
+  integration: '#06b6d4',
+  memory: '#818cf8',
+  knowledge: '#6366f1',
+  automation: '#c084fc',
+  events: '#94a3b8',
+  ai_routing: '#22d3ee',
+  monitoring: '#4ade80',
+  sessions: '#fbbf24',
+  auth: '#f87171',
+}
 
 export default function SpacesPage() {
-  const { spaces, activeSpace } = useAppStore()
-  const [selectedSpace, setSelectedSpace] = useState<string | null>(null)
-  const [testTask, setTestTask] = useState('')
-  const [testResult, setTestResult] = useState('')
-  const [testing, setTesting] = useState(false)
+  const { locale } = useAppStore()
+  const [spaces, setSpaces] = useState<SpaceInfo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [backendUrl, setBackendUrl] = useState('')
 
-  async function testSpace(spaceId: string) {
-    if (!testTask.trim()) return
-    setTesting(true)
-    setTestResult('')
+  const load = async () => {
+    setLoading(true)
     try {
-      const res = await fetch(`/api/v1/spaces/${spaceId}/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: testTask, role: 'cognition', session_id: 'spaces_test' }),
-      })
-      const data = await res.json()
-      setTestResult(data.result || `Error: ${res.status} ${res.statusText}`)
-    } catch (e: any) {
-      setTestResult(`Connection error: ${e.message}`)
+      const data = await getSpaces()
+      setSpaces(data.spaces || [])
+      setBackendUrl(data.backend_url || '')
+    } catch (e) {
+      // Show placeholder spaces if backend is offline
+      setSpaces([])
+    } finally {
+      setLoading(false)
     }
-    setTesting(false)
   }
 
-  return (
-    <div className="h-full overflow-y-auto p-6" style={{ background: '#05060d' }}>
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white mb-1">Distributed Worker Spaces</h1>
-          <p className="text-slate-500 text-sm">22 spaces across core cognition, execution, browser/UI, verification, deployment, memory, coordination, monitoring, session, and infrastructure layers.</p>
-        </div>
+  useEffect(() => { load() }, [])
 
-        <div className="mb-6 p-4 rounded-xl border" style={{ background: '#07080f', borderColor: '#1e2035' }}>
-          <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mb-3">Architecture Overview</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            {Array.from(new Set(SPACE_CATALOG.map(space => space.layer))).map(layer => (
-              <div key={layer} className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-300" style={{ background: '#0b1020', border: '1px solid #1e2035' }}>
-                <div className="text-[10px] text-violet-300 mb-1">{layer}</div>
-                <div>{SPACE_CATALOG.filter(space => space.layer === layer).length} spaces</div>
-              </div>
-            ))}
+  const active = spaces.filter(s => s.status === 'active').length
+
+  return (
+    <div className="h-full overflow-y-auto p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <Zap size={20} style={{ color: 'var(--accent-bright)' }} />
+            {locale === 'my' ? '22 Worker Spaces' : '22 Worker Spaces'}
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+            {locale === 'my'
+              ? `${active}/22 space လုပ်ဆောင်နေသည် · Backend: ${backendUrl || 'N/A'}`
+              : `${active}/22 spaces active · All running inside main backend`}
+          </p>
+        </div>
+        <button onClick={load} className="btn btn-secondary text-xs" disabled={loading}>
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          {locale === 'my' ? 'ပြန်စစ်' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Architecture Note */}
+      <div className="mb-4 p-4 rounded-xl"
+        style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.15)' }}>
+        <div className="flex items-start gap-3">
+          <div className="text-xl mt-0.5">ℹ️</div>
+          <div>
+            <div className="text-sm font-semibold text-white mb-1">
+              {locale === 'my' ? 'Architecture မှတ်ချက်' : 'Architecture Note'}
+            </div>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {locale === 'my'
+                ? 'Hugging Face ရှိ 22 static spaces များသည် placeholder HTML သာဖြစ်သည်။ စစ်မှန်သော 22 agent spaces အားလုံးသည် main backend (autonomous-coding-system space) အတွင်းတွင် run နေသည်။ Architecture plan မှာ ဆက်လက်ချဲ့ထွင်ရန်ဖြစ်သည်။'
+                : '22 HuggingFace "spaces" were placeholder HTML pages. All 22 real agent spaces now run inside the main backend (autonomous-coding-system). The distributed HF architecture is the future roadmap.'}
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          {SPACE_CATALOG.map((space, i) => {
-            const spaceState = spaces[space.id]
-            const isActive = spaceState?.active
-            const isSelected = selectedSpace === space.id
+      {loading ? (
+        <div className="flex items-center justify-center h-40 gap-3">
+          <Loader size={18} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            {locale === 'my' ? 'Space status စစ်ဆေးနေသည်...' : 'Checking space status...'}
+          </span>
+        </div>
+      ) : spaces.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-40 gap-2">
+          <XCircle size={24} style={{ color: '#f87171' }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            {locale === 'my' ? 'Backend ချိတ်ဆက်မရသောကြောင့် space status ရယူ၍မရပါ' : 'Cannot reach backend to get space status'}
+          </p>
+          <button onClick={load} className="btn btn-secondary text-xs">Retry</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {spaces.map((space, i) => {
+            const color = ROLE_COLORS[space.role] || '#7c3aed'
             return (
-              <motion.div key={space.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }} onClick={() => setSelectedSpace(isSelected ? null : space.id)} className="p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02]" style={{ background: isSelected ? `${space.color}10` : '#07080f', borderColor: isSelected ? `${space.color}50` : isActive ? `${space.color}30` : '#1e2035' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-2xl">{space.icon}</span>
+              <motion.div
+                key={space.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+                className="card p-4 relative overflow-hidden"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                    style={{ background: `${color}12`, border: `1px solid ${color}20` }}>
+                    {space.icon}
+                  </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${space.color}20`, color: space.color }}>{space.layer}</span>
-                    {isActive && <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: space.color }} />}
+                    {space.online ? (
+                      <CheckCircle size={13} style={{ color: '#22c55e' }} />
+                    ) : (
+                      <XCircle size={13} style={{ color: '#ef4444' }} />
+                    )}
                   </div>
                 </div>
-                <h3 className="text-sm font-bold text-white mb-1">{space.name}</h3>
-                <p className="text-[10px] text-slate-500 mb-3 leading-relaxed">{space.description}</p>
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-[9px] text-slate-700 mb-1">RESPONSIBILITIES</div>
-                    <div className="flex flex-wrap gap-1">
-                      {space.responsibilities.slice(0, 3).map(item => (
-                        <span key={item} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: '#0d0e1a', color: '#94a3b8', border: '1px solid #1e2035' }}>{item}</span>
-                      ))}
-                    </div>
+                <div className="text-xs font-bold text-white mb-1">{space.name}</div>
+                <div className="text-[10px] px-1.5 py-0.5 rounded-full inline-block mb-2"
+                  style={{ background: `${color}12`, color, border: `1px solid ${color}20` }}>
+                  {space.role.replace(/_/g, ' ')}
+                </div>
+                {space.agent && (
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    Agent: {space.agent}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[9px] text-slate-700">ROLES: <span style={{ color: space.color }}>{space.roles.join(', ')}</span></div>
-                    {spaceState?.taskCount ? <span className="text-[9px]" style={{ color: space.color }}>{spaceState.taskCount} tasks</span> : null}
-                  </div>
+                )}
+                <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {space.status === 'active' ? (
+                    <span style={{ color: '#4ade80' }}>● Active in backend</span>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>◦ System space</span>
+                  )}
                 </div>
               </motion.div>
             )
           })}
         </div>
-
-        {selectedSpace && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="p-4 rounded-xl border" style={{ background: '#07080f', borderColor: `${SPACE_CATALOG.find(space => space.id === selectedSpace)?.color}40` }}>
-            <div className="text-sm font-bold text-white mb-3">Test {SPACE_CATALOG.find(space => space.id === selectedSpace)?.icon} {selectedSpace}</div>
-            <div className="flex gap-2 mb-3">
-              <input value={testTask} onChange={e => setTestTask(e.target.value)} placeholder={`Enter a task for ${selectedSpace}...`} className="flex-1 px-3 py-2 rounded-lg text-sm text-slate-200 bg-black/20 outline-none" style={{ border: '1px solid #1e2035' }} onKeyDown={e => e.key === 'Enter' && testSpace(selectedSpace)} />
-              <button onClick={() => testSpace(selectedSpace)} disabled={testing || !testTask.trim()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 transition-all" style={{ background: SPACE_CATALOG.find(space => space.id === selectedSpace)?.color }}>
-                {testing ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
-                {testing ? 'Running...' : 'Execute'}
-              </button>
-            </div>
-            {testResult && <div className="p-3 rounded-lg text-xs text-slate-300 whitespace-pre-wrap" style={{ background: '#0a0b14', border: '1px solid #1e2035' }}>{testResult}</div>}
-          </motion.div>
-        )}
-
-        <div className="mt-6 p-4 rounded-xl border" style={{ background: '#07080f', borderColor: '#1e2035' }}>
-          <div className="text-sm font-bold text-white mb-2">Currently active</div>
-          <div className="flex flex-wrap gap-2">
-            {SPACE_CATALOG.filter(space => spaces[space.id]?.active || activeSpace === space.id).map(space => (
-              <span key={space.id} className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: `${space.color}20`, color: space.color, border: `1px solid ${space.color}40` }}>{space.icon} {space.name}</span>
-            ))}
-            {!SPACE_CATALOG.some(space => spaces[space.id]?.active || activeSpace === space.id) && <span className="text-xs text-slate-500">No active worker spaces yet.</span>}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
