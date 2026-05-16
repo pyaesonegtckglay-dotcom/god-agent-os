@@ -15,9 +15,11 @@ import WorkflowsPage from '@/components/pages/WorkflowsPage'
 import AnalyticsPage from '@/components/pages/AnalyticsPage'
 import SettingsPage from '@/components/pages/SettingsPage'
 import ConnectorsPage from '@/components/pages/ConnectorsPage'
+import ChatMainPage from '@/components/pages/ChatMainPage'
 import { useAppStore } from '@/store/useAppStore'
 
-const PAGE_MAP = {
+const PAGE_MAP: Record<string, React.ComponentType> = {
+  chat: ChatMainPage,
   dashboard: DashboardPage,
   spaces: SpacesPage,
   agents: AgentsPage,
@@ -38,7 +40,7 @@ export default function GodAgentOS() {
   const loadingSteps = [
     'Initializing God Core Space...',
     'Loading 22 worker spaces...',
-    'Registering 5 cognitive roles...',
+    'Registering AI providers...',
     'Connecting model router...',
     'System Ready ✓',
   ]
@@ -53,7 +55,7 @@ export default function GodAgentOS() {
         }
         return prev + 1
       })
-    }, 400)
+    }, 350)
     return () => clearInterval(interval)
   }, [])
 
@@ -68,8 +70,8 @@ export default function GodAgentOS() {
             </div>
           </div>
           <div className="text-2xl font-black text-white mb-1">GOD AGENT OS</div>
-          <div className="text-sm text-slate-500 mb-1">Distributed Autonomous Agent OS</div>
-          <div className="text-xs text-violet-500 font-medium mb-6">22 Worker Spaces · v10.0</div>
+          <div className="text-sm text-slate-500 mb-1">General Autonomous Agent OS</div>
+          <div className="text-xs text-violet-500 font-medium mb-6">22 Spaces · Gemini + SambaNova + GitHub · v10.0</div>
           <div className="space-y-1 mb-4">
             {loadingSteps.map((step, i) => (
               <div key={i} className={`text-xs transition-all duration-300 ${i <= loadingStep ? 'text-slate-400' : 'text-slate-700'}`}>
@@ -83,7 +85,7 @@ export default function GodAgentOS() {
     )
   }
 
-  const PageComponent = PAGE_MAP[currentPage] || DashboardPage
+  const PageComponent = PAGE_MAP[currentPage] || ChatMainPage
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#05060d' }}>
       <Sidebar />

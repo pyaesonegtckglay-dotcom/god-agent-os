@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gcc g++ libffi-dev libssl-dev curl nodejs npm \
+    gcc g++ libffi-dev libssl-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements
@@ -14,8 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY . .
 
-# Create sandbox workspace
+# Create sandbox workspace and data directory
 RUN mkdir -p /tmp/god_sandbox
+RUN mkdir -p /data
 
 # Expose port for HuggingFace Spaces
 EXPOSE 7860
@@ -23,7 +24,12 @@ EXPOSE 7860
 # Environment
 ENV PORT=7860
 ENV PYTHONPATH=/app
-ENV DB_PATH=/tmp/god_agent_os.db
+# Use /data for persistent storage on HuggingFace Spaces
+ENV DB_PATH=/data/god_agent_os.db
 
-# Start with distributed runtime
-CMD ["python", "-m", "uvicorn", "main_v9:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:7860/api/v1/health || exit 1
+
+# Start with the v10 main entry
+CMD ["python", "-m", "uvicorn", "main_v9:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1", "--log-level", "info"]

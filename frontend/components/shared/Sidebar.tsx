@@ -1,11 +1,12 @@
 'use client'
 
-import { LayoutDashboard, Box, Bot, ListTodo, Brain, BookOpen, GitBranch, BarChart2, Settings, Zap, Plug } from 'lucide-react'
+import { MessageSquare, LayoutDashboard, Box, Bot, ListTodo, Brain, BookOpen, GitBranch, BarChart2, Settings, Zap, Plug } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import type { Page } from '@/store/useAppStore'
 import { SPACE_CATALOG } from '@/lib/spaceCatalog'
 
 const NAV_ITEMS: { id: Page; label: string; icon: any }[] = [
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'spaces', label: 'Spaces', icon: Box },
   { id: 'agents', label: 'Agents', icon: Bot },
@@ -23,7 +24,7 @@ export default function Sidebar() {
   if (!sidebarOpen) return null
 
   return (
-    <aside className="w-60 flex-shrink-0 flex flex-col border-r h-full overflow-y-auto" style={{ background: '#07080f', borderColor: '#1e2035' }}>
+    <aside className="w-52 flex-shrink-0 flex flex-col border-r h-full overflow-y-auto" style={{ background: '#07080f', borderColor: '#1e2035' }}>
       <div className="p-3 border-b" style={{ borderColor: '#1e2035' }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
@@ -42,9 +43,20 @@ export default function Sidebar() {
             const Icon = item.icon
             const active = currentPage === item.id
             return (
-              <button key={item.id} onClick={() => setCurrentPage(item.id)} className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-violet-500/15 text-violet-300 border border-violet-500/20' : 'text-slate-500 hover:text-slate-300 hover:bg-white/4'}`}>
+              <button
+                key={item.id}
+                onClick={() => setCurrentPage(item.id)}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  active
+                    ? 'bg-violet-500/15 text-violet-300 border border-violet-500/20'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                }`}
+              >
                 <Icon size={13} />
                 {item.label}
+                {item.id === 'chat' && active && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                )}
               </button>
             )
           })}
@@ -53,14 +65,25 @@ export default function Sidebar() {
         <div className="mt-4">
           <div className="px-2 mb-2 text-[9px] font-bold text-slate-600 uppercase tracking-widest">Active Spaces</div>
           <div className="grid grid-cols-2 gap-1">
-            {SPACE_CATALOG.map(space => {
+            {SPACE_CATALOG.slice(0, 12).map(space => {
               const isActive = spaces[space.id]?.active
               const isSelected = activeSpace === space.id
               return (
-                <div key={space.id} className="flex flex-col items-center p-1.5 rounded-lg text-center transition-all cursor-pointer" style={{ background: isSelected || isActive ? `${space.color}15` : 'rgba(255,255,255,0.03)', border: `1px solid ${isSelected || isActive ? `${space.color}40` : 'transparent'}` }}>
+                <div
+                  key={space.id}
+                  className="flex flex-col items-center p-1.5 rounded-lg text-center transition-all cursor-pointer"
+                  style={{
+                    background: isSelected || isActive ? `${space.color}15` : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${isSelected || isActive ? `${space.color}40` : 'transparent'}`,
+                  }}
+                >
                   <span className="text-sm">{space.icon}</span>
-                  <span className="text-[8px] mt-0.5" style={{ color: isActive ? space.color : '#475569' }}>{space.shortName}</span>
-                  {isActive && <div className="w-1 h-1 rounded-full mt-0.5 animate-pulse" style={{ background: space.color }} />}
+                  <span className="text-[8px] mt-0.5" style={{ color: isActive ? space.color : '#475569' }}>
+                    {space.shortName}
+                  </span>
+                  {isActive && (
+                    <div className="w-1 h-1 rounded-full mt-0.5 animate-pulse" style={{ background: space.color }} />
+                  )}
                 </div>
               )
             })}
@@ -69,7 +92,9 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-3 border-t" style={{ borderColor: '#1e2035' }}>
-        <div className="text-[9px] text-slate-600 text-center">Distributed worker-space runtime</div>
+        <div className="text-[9px] text-slate-600 text-center">
+          Gemini · SambaNova · GitHub Models
+        </div>
       </div>
     </aside>
   )
