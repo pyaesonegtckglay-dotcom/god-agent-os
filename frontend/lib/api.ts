@@ -335,6 +335,32 @@ export async function getConnectors() {
   return fetchAPI('/api/v1/connectors')
 }
 
+export async function setConnectorToken(connectorId: string, token: string) {
+  return fetchAPI(`/api/v1/connectors/${connectorId}/token`, {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+}
+
+export async function n8nSetConfig(url: string, apiKey?: string) {
+  try {
+    return await fetchAPI('/api/v1/n8n/config', {
+      method: 'POST',
+      body: JSON.stringify({ url, api_key: apiKey }),
+    })
+  } catch {
+    return { success: false, message: 'Failed to save n8n config' }
+  }
+}
+
+export async function n8nGetConfig() {
+  try {
+    return await fetchAPI('/api/v1/n8n/config')
+  } catch {
+    return { url: '', api_key_set: false }
+  }
+}
+
 // ─── AI Stats ────────────────────────────────────────────────────────────────
 
 export async function getAIStats() {
@@ -353,6 +379,130 @@ export function createWebSocket(sessionId: string): WebSocket {
 
 export function createComputerUseWS(sessionId: string): WebSocket {
   return new WebSocket(`${getWsBase()}/ws/computer-use/${sessionId}`)
+}
+
+// ─── N8N Workflow API ─────────────────────────────────────────────────────────
+
+/**
+ * Safe n8n fetch — always resolves, never throws.
+ * Returns null on any error so callers can handle gracefully.
+ */
+async function n8nFetch(path: string, options?: RequestInit) {
+  try {
+    const base = getApiBase()
+    const res = await fetch(`${base}/api/v1/n8n${path}`, {
+      headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
+      ...options,
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`N8N API ${res.status}: ${text.slice(0, 200) || res.statusText}`)
+    }
+    return res.json()
+  } catch (e: unknown) {
+    throw e
+  }
+}
+
+/** Check if n8n is connected */
+export async function n8nStatus(): Promise<{ connected: boolean; url?: string; error?: string }> {
+  try {
+    return await n8nFetch('/status')
+  } catch {
+    return { connected: false, error: 'N8N not configured or unreachable' }
+  }
+}
+
+/** Get all workflows from n8n */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function n8nGetWorkflows(limit = 100): Promise<{ workflows: any[] }> {
+  try {
+    return await n8nFetch(`/workflows?limit=${limit}`)
+  } catch {
+    return { workflows: [] }
+  }
+}
+
+/** Get executions from n8n */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function n8nGetExecutions(
+  workflowId?: string,
+  limit = 20
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ executions: any[] }> {
+  try {
+    const q = new URLSearchParams({ limit: String(limit) })
+    if (workflowId) q.set('workflowId', workflowId)
+    return await n8nFetch(`/executions?${q}`)
+  } catch {
+    return { executions: [] }
+  }
+}
+
+/** Get n8n stats summary */
+export async function n8nGetStats(): Promise<{
+  total_workflows: number
+  active_workflows: number
+  paused_workflows: number
+  recent_executions: number
+  recent_success: number
+  recent_failed: number
+  success_rate: number
+  timestamp: number
+  error?: string
+}> {
+  try {
+    return await n8nFetch('/stats')
+  } catch {
+    return {
+      total_workflows: 0,
+      active_workflows: 0,
+      paused_workflows: 0,
+      recent_executions: 0,
+      recent_success: 0,
+      recent_failed: 0,
+      success_rate: 0,
+      timestamp: Date.now(),
+      error: 'N8N not connected',
+    }
+  }
+}
+
+/** Execute / trigger a workflow */
+export async function n8nExecuteWorkflow(
+  workflowId: string,
+  data?: Record<string, unknown>
+): Promise<unknown> {
+  return n8nFetch(`/workflows/${workflowId}/execute`, {
+    method: 'POST',
+    body: JSON.stringify(data || {}),
+  })
+}
+
+/** Toggle a workflow active/inactive */
+export async function n8nToggleWorkflow(
+  workflowId: string,
+  active: boolean
+): Promise<unknown> {
+  return n8nFetch(`/workflows/${workflowId}/toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ active }),
+  })
+}
+
+/** Save n8n connector config */
+export async function n8nSaveConfig(
+  url: string,
+  apiKey?: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    return await fetchAPI('/api/v1/n8n/config', {
+      method: 'POST',
+      body: JSON.stringify({ url, api_key: apiKey }),
+    })
+  } catch {
+    return { success: false, message: 'Failed to save config' }
+  }
 }
 
 // ─── Export URLs ─────────────────────────────────────────────────────────────
