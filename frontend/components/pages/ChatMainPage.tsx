@@ -8,7 +8,7 @@ import {
   Search, Trash2, Sparkles, Terminal,
   Brain, RefreshCw, Copy, Check, ChevronRight, AlertCircle, Wifi, WifiOff
 } from 'lucide-react'
-import { streamOrchestrate, getHealth } from '@/lib/api'
+import { streamOrchestrate, getHealth, type ToolResult, type ComputerUseStepEvent } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
 import ReactMarkdown from 'react-markdown'
 
@@ -23,6 +23,7 @@ interface Message {
   agent?: string
   provider?: string
   error?: boolean
+  toolResults?: ToolResult[]
 }
 
 interface ChatSession {
@@ -46,8 +47,8 @@ const QUICK_ACTIONS = [
   { icon: Bot,          label: 'Multi-Agent Task',       labelMy: 'Multi-Agent',           prompt: 'Build a full autonomous AI agent system: plan, code, test, and deploy a Telegram AI bot' },
 ]
 
-const STORAGE_KEY = 'god_agent_v11_sessions'
-const ACTIVE_KEY = 'god_agent_v11_active'
+const STORAGE_KEY = 'god_agent_v12_sessions'
+const ACTIVE_KEY = 'god_agent_v12_active'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -189,6 +190,7 @@ export default function ChatMainPage() {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking')
+  const [toolResultsRef, setToolResultsRef] = useState<ToolResult[]>([])
 
   const abortRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -318,6 +320,8 @@ export default function ChatMainPage() {
       status: 'running',
     })
 
+    const sessionToolResults: ToolResult[] = []
+
     const ctrl = await streamOrchestrate(
       content,
       sessionId,
@@ -383,13 +387,18 @@ export default function ChatMainPage() {
         })
       },
       // onComputerUseStep
-      (step: { type: string; title: string; detail?: string }) => {
+      (step: ComputerUseStepEvent) => {
         addComputerUseStep({
-          type: step.type as ComputerUseStep['type'],
+          type: (step.type as ComputerUseStep['type']) || 'executing',
           title: step.title,
           detail: step.detail,
-          status: 'running',
+          status: step.status === 'done' ? 'done' : 'running',
         })
+      },
+      // onToolResult
+      (result: ToolResult) => {
+        sessionToolResults.push(result)
+        setToolResultsRef([...sessionToolResults])
       }
     )
 
@@ -488,7 +497,7 @@ export default function ChatMainPage() {
                   <Zap size={28} className="text-white" />
                 </div>
                 <h1 className="text-2xl font-black text-white mb-2">
-                  {locale === 'my' ? 'GOD AGENT OS v11' : 'GOD AGENT OS v11'}
+                  {locale === 'my' ? 'GOD AGENT OS v12' : 'GOD AGENT OS v12'}
                 </h1>
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                   {locale === 'my'
@@ -610,7 +619,7 @@ export default function ChatMainPage() {
                 )}
               </span>
               <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {locale === 'my' ? 'God Mode v11' : 'God Mode v11 · 16 Agents'}
+                {locale === 'my' ? 'God Mode v12 · Real Execution' : 'God Mode v12 · E2B Execution'}
               </span>
             </div>
           </div>

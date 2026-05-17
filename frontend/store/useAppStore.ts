@@ -33,7 +33,7 @@ export interface SpaceStatus {
 // ─── Computer-Use Step (Manus-style) ─────────────────────────────────────────
 export interface ComputerUseStep {
   id: string
-  type: 'thinking' | 'browsing' | 'coding' | 'executing' | 'git' | 'deploy' | 'complete' | 'error' | 'reading' | 'writing' | 'searching'
+  type: 'thinking' | 'browsing' | 'coding' | 'executing' | 'terminal' | 'file' | 'git' | 'deploy' | 'complete' | 'error' | 'reading' | 'writing' | 'searching' | 'sandbox' | 'done'
   title: string
   detail?: string
   status: 'running' | 'done' | 'error'

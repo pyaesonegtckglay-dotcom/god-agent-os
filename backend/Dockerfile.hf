@@ -7,24 +7,50 @@ RUN apt-get update && apt-get install -y \
     gcc g++ libffi-dev libssl-dev curl git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy requirements — use v12 minimal requirements
+COPY requirements_v12.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt || \
+    pip install --no-cache-dir \
+        "fastapi==0.115.0" \
+        "uvicorn[standard]==0.30.0" \
+        "websockets==13.0" \
+        "pydantic==2.8.0" \
+        "python-multipart==0.0.9" \
+        "httpx[http2]==0.27.0" \
+        "aiohttp==3.10.0" \
+        "aiosqlite==0.20.0" \
+        "sqlalchemy[asyncio]==2.0.35" \
+        "python-dotenv==1.0.1" \
+        "slowapi==0.1.9" \
+        "structlog==24.4.0" \
+        "rich==13.8.0" \
+        "psutil==6.0.0" \
+        "gitpython==3.1.43" \
+        "pygithub==2.3.0"
+
+# Install e2b separately (may have version issues)
+RUN pip install --no-cache-dir e2b==1.0.5 e2b-code-interpreter==1.0.5 || \
+    pip install --no-cache-dir e2b e2b-code-interpreter || \
+    echo "E2B install failed — will use local fallback"
 
 # Copy all backend code
 COPY . .
 
-# Workspace and data dirs
-RUN mkdir -p /tmp/god_workspace /tmp/god_sandbox /data
+# Create required directories
+RUN mkdir -p /tmp/god_workspace /tmp/workspace /data /app/sandbox
 
+# Expose port
 EXPOSE 7860
 
+# Environment
 ENV PORT=7860
 ENV PYTHONPATH=/app
-ENV DB_PATH=/data/god_agent_v11.db
+ENV DB_PATH=/data/god_agent_v12.db
 ENV WORKSPACE_DIR=/tmp/god_workspace
 
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:7860/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "main_v11:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1", "--log-level", "info"]
+# Start v12 — True Autonomous Agent Runtime
+CMD ["python", "-m", "uvicorn", "main_v12:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1", "--log-level", "info"]

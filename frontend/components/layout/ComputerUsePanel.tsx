@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { X, MonitorPlay, Brain, Globe, Code2, Terminal, GitBranch, Rocket, CheckCircle, XCircle, Loader, FileText, Search, PenTool } from 'lucide-react'
+import { X, MonitorPlay, Brain, Globe, Code2, Terminal, GitBranch, Rocket, CheckCircle, XCircle, Loader, FileText, Search, PenTool, HardDrive } from 'lucide-react'
 import { useAppStore, type ComputerUseStep } from '@/store/useAppStore'
 
 const STEP_ICONS: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   thinking:  { icon: Brain,       color: '#a78bfa', bg: 'rgba(124,58,237,0.12)' },
   browsing:  { icon: Globe,       color: '#22d3ee', bg: 'rgba(34,211,238,0.12)' },
   coding:    { icon: Code2,       color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
+  terminal:  { icon: Terminal,    color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   executing: { icon: Terminal,    color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  file:      { icon: FileText,    color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
   git:       { icon: GitBranch,   color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
   deploy:    { icon: Rocket,      color: '#f472b6', bg: 'rgba(244,114,182,0.12)' },
   complete:  { icon: CheckCircle, color: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
@@ -16,6 +18,7 @@ const STEP_ICONS: Record<string, { icon: React.ElementType; color: string; bg: s
   reading:   { icon: FileText,    color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
   writing:   { icon: PenTool,     color: '#818cf8', bg: 'rgba(129,140,248,0.12)'},
   searching: { icon: Search,      color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
+  sandbox:   { icon: HardDrive,   color: '#fb923c', bg: 'rgba(251,146,60,0.12)' },
 }
 
 function StepCard({ step }: { step: ComputerUseStep }) {
@@ -28,7 +31,7 @@ function StepCard({ step }: { step: ComputerUseStep }) {
       style={{ borderBottom: '1px solid var(--border)' }}
     >
       <div className="computer-use-step-icon" style={{ background: def.bg }}>
-        {step.status === 'running' && step.type !== 'complete' && step.type !== 'error' ? (
+        {step.status === 'running' && step.type !== 'complete' && step.type !== 'error' && step.type !== 'done' ? (
           <Loader size={14} style={{ color: def.color, animation: 'spin 1s linear infinite' }} />
         ) : (
           <Icon size={14} style={{ color: def.color }} />

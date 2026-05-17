@@ -1,6 +1,6 @@
 /**
- * God Agent OS v11 — API Client
- * Connects to real backend (HF Space or custom URL)
+ * God Agent OS v12 — API Client
+ * Real autonomous agent — E2B execution + live streaming
  */
 
 export const DEFAULT_BACKEND = process.env.NEXT_PUBLIC_API_URL || 'https://pyae1994-autonomous-coding-system.hf.space'
@@ -58,56 +58,41 @@ export interface ChatMessage {
   content: string
 }
 
-export async function sendChat(messages: ChatMessage[], options?: {
-  stream?: boolean
-  session_id?: string
-  model?: string
-  temperature?: number
-  max_tokens?: number
-}) {
-  return fetchAPI('/api/v1/chat', {
-    method: 'POST',
-    body: JSON.stringify({
-      messages,
-      stream: false,
-      session_id: options?.session_id || '',
-      model: options?.model || 'gemini-2.0-flash',
-      temperature: options?.temperature ?? 0.7,
-      max_tokens: options?.max_tokens ?? 4096,
-    }),
-  })
+export interface ToolResult {
+  tool: string
+  success: boolean
+  sandboxId?: string
+  stdout?: string
+  stderr?: string
+  exitCode?: number
+  output?: string
+  durationMs?: number
 }
 
-export function streamChat(messages: ChatMessage[], options?: {
-  session_id?: string
-  model?: string
-  temperature?: number
-  max_tokens?: number
-}): EventSource {
-  // Use fetch for SSE
-  return new EventSource(`${getApiBase()}/api/v1/chat/stream`)
+export interface ComputerUseStepEvent {
+  type: 'thinking' | 'coding' | 'terminal' | 'file' | 'browsing' | 'git' | 'deploy' | 'executing' | 'complete' | 'error'
+  title: string
+  detail?: string
+  status?: 'running' | 'done' | 'error'
+  tool?: string
+  sandboxId?: string
+  stdout?: string
+  exitCode?: number
 }
 
-export async function orchestrate(message: string, sessionId: string, context?: object) {
-  return fetchAPI('/api/v1/orchestrate', {
-    method: 'POST',
-    body: JSON.stringify({
-      message,
-      session_id: sessionId,
-      stream: false,
-      context: context || {},
-    }),
-  })
-}
-
+/**
+ * Stream from autonomous agent — handles v12 event protocol
+ * Events: llm_chunk, tool_executing, tool_result, agent_complete, stream_end, error
+ */
 export async function streamOrchestrate(
   message: string,
   sessionId: string,
   onChunk: (chunk: string) => void,
   onDone: (full: string) => void,
   onError: (err: string) => void,
-  onComputerUseStep?: (step: { type: string; title: string; detail?: string }) => void
-) {
+  onComputerUseStep?: (step: ComputerUseStepEvent) => void,
+  onToolResult?: (result: ToolResult) => void,
+): Promise<AbortController> {
   const base = getApiBase()
   const controller = new AbortController()
 
@@ -132,72 +117,275 @@ export async function streamOrchestrate(
     const reader = res.body?.getReader()
     const decoder = new TextDecoder()
     let full = ''
+    let buffer = ''
 
     if (!reader) {
       onError('No response body')
       return controller
     }
 
-    // Emit thinking step
-    onComputerUseStep?.({ type: 'thinking', title: `Processing: ${message.slice(0, 60)}...` })
+    // Emit initial thinking step
+    onComputerUseStep?.({
+      type: 'thinking',
+      title: `Analyzing: ${message.slice(0, 60)}...`,
+      status: 'running',
+    })
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      const text = decoder.decode(value, { stream: true })
-      const lines = text.split('\n')
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''  // Keep incomplete line in buffer
+
       for (const line of lines) {
-        if (!line.startsWith('data:')) continue
-        const jsonStr = line.slice(5).trim()
-        if (jsonStr === '[DONE]') { onDone(full); return controller }
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) continue
+
+        const jsonStr = trimmed.slice(5).trim()
+        if (!jsonStr || jsonStr === '[DONE]') {
+          onDone(full)
+          return controller
+        }
+
         try {
           const event = JSON.parse(jsonStr)
-          if (event.type === 'llm_chunk') {
-            const chunk = event.data?.chunk || ''
-            full += chunk
-            onChunk(chunk)
-          } else if (event.type === 'stream_end') {
-            onDone(event.data?.full_response || full)
-            return controller
-          } else if (event.type === 'agent_start') {
-            onComputerUseStep?.({
-              type: 'thinking',
-              title: `${event.data?.agent || 'Agent'}: ${event.data?.task?.slice(0, 60) || ''}`,
-            })
-          } else if (event.type === 'tool_called') {
-            onComputerUseStep?.({
-              type: event.data?.tool?.includes('browser') ? 'browsing' :
-                    event.data?.tool?.includes('code') ? 'coding' :
-                    event.data?.tool?.includes('git') ? 'git' :
-                    event.data?.tool?.includes('deploy') ? 'deploy' : 'executing',
-              title: event.data?.tool || 'Tool execution',
-              detail: event.data?.step,
-            })
-          } else if (event.type === 'code_generated') {
-            onComputerUseStep?.({
-              type: 'coding',
-              title: `Generated ${event.data?.code_blocks || 0} code blocks (${event.data?.total_lines || 0} lines)`,
-              detail: event.data?.languages?.join(', '),
-            })
+          const eventType = event.type || ''
+          const data = event.data || {}
+
+          switch (eventType) {
+            case 'llm_chunk': {
+              const chunk = data.chunk || ''
+              if (chunk) {
+                full += chunk
+                onChunk(chunk)
+              }
+              break
+            }
+
+            case 'thinking_start': {
+              onComputerUseStep?.({
+                type: 'thinking',
+                title: `Reasoning (iteration ${data.iteration || 1})...`,
+                status: 'running',
+              })
+              break
+            }
+
+            case 'agent_thinking': {
+              onComputerUseStep?.({
+                type: 'thinking',
+                title: data.message ? `Processing: ${String(data.message).slice(0, 60)}` : 'Thinking...',
+                status: 'running',
+              })
+              break
+            }
+
+            case 'agent_iteration': {
+              onComputerUseStep?.({
+                type: 'thinking',
+                title: `Planning step ${data.iteration || 1}...`,
+                status: 'running',
+              })
+              break
+            }
+
+            case 'tool_executing': {
+              const toolName = data.tool || ''
+              const stepType = getStepType(toolName)
+              onComputerUseStep?.({
+                type: stepType,
+                title: `${getToolLabel(toolName)}: ${formatArgs(data.args)}`,
+                status: 'running',
+                tool: toolName,
+              })
+              break
+            }
+
+            case 'tool_result': {
+              const toolName = data.tool || ''
+              const stepType = getStepType(toolName)
+              const raw = data.raw || {}
+              const success = data.success !== false
+              const sandboxId = data.sandbox_id || raw.sandbox_id || 'local'
+              const stdout = raw.stdout || raw.output || ''
+              const stderr = raw.stderr || ''
+              const exitCode = raw.exit_code ?? 0
+
+              onComputerUseStep?.({
+                type: success ? stepType : 'error',
+                title: success
+                  ? `✅ ${getToolLabel(toolName)} completed (sandbox: ${sandboxId})`
+                  : `❌ ${getToolLabel(toolName)} failed`,
+                detail: stdout ? stdout.slice(0, 300) : (stderr ? stderr.slice(0, 200) : undefined),
+                status: 'done',
+                tool: toolName,
+                sandboxId,
+                stdout: stdout.slice(0, 500),
+                exitCode,
+              })
+
+              onToolResult?.({
+                tool: toolName,
+                success,
+                sandboxId,
+                stdout: stdout.slice(0, 2000),
+                stderr: stderr.slice(0, 500),
+                exitCode,
+                output: data.result?.slice(0, 2000),
+                durationMs: raw._duration_ms,
+              })
+
+              // Inject tool output into chat as a system block
+              if (data.result) {
+                const resultBlock = `\n\n**Tool: ${getToolLabel(toolName)}** (${sandboxId})\n${data.result.slice(0, 1500)}`
+                full += resultBlock
+                onChunk(resultBlock)
+              }
+              break
+            }
+
+            case 'agent_complete': {
+              onComputerUseStep?.({
+                type: 'complete',
+                title: `✅ Task complete — ${data.tools_called || 0} tools executed, ${data.iterations || 1} iterations`,
+                status: 'done',
+              })
+              break
+            }
+
+            case 'stream_end': {
+              const finalResponse = data.full_response || full
+              onDone(finalResponse)
+              return controller
+            }
+
+            case 'error': {
+              onError(data.error || 'Unknown error')
+              return controller
+            }
+
+            // Legacy events from older API
+            case 'agent_start': {
+              onComputerUseStep?.({
+                type: 'thinking',
+                title: `Agent started: ${String(data.message || '').slice(0, 60)}`,
+                status: 'running',
+              })
+              break
+            }
+
+            case 'tool_called': {
+              const toolName = data.tool || ''
+              onComputerUseStep?.({
+                type: getStepType(toolName),
+                title: `Calling: ${getToolLabel(toolName)}`,
+                status: 'running',
+                tool: toolName,
+              })
+              break
+            }
+
+            case 'computer_use_step': {
+              onComputerUseStep?.({
+                type: (data.type as ComputerUseStepEvent['type']) || 'executing',
+                title: data.title || '',
+                detail: data.detail,
+                status: data.status === 'done' ? 'done' : 'running',
+              })
+              break
+            }
           }
-        } catch {}
+        } catch (_e) {
+          // Skip malformed JSON lines
+        }
       }
     }
+
     onDone(full)
   } catch (e: unknown) {
     const msg = (e as Error).message || String(e)
     if (!msg.includes('abort')) onError(msg)
   }
+
   return controller
 }
 
-// ─── Spaces ─────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getStepType(toolName: string): ComputerUseStepEvent['type'] {
+  const map: Record<string, ComputerUseStepEvent['type']> = {
+    execute_python: 'coding',
+    execute_shell: 'terminal',
+    write_file: 'file',
+    read_file: 'file',
+    delete_file: 'file',
+    list_files: 'file',
+    web_search: 'browsing',
+    install_package: 'terminal',
+    git_clone: 'git',
+    git_commit: 'git',
+    git_push: 'git',
+    deploy: 'deploy',
+  }
+  return map[toolName] || 'executing'
+}
+
+function getToolLabel(toolName: string): string {
+  const map: Record<string, string> = {
+    execute_python: '🐍 Python Execution',
+    execute_shell: '💻 Shell Command',
+    write_file: '📝 Write File',
+    read_file: '📖 Read File',
+    delete_file: '🗑️ Delete File',
+    list_files: '📁 List Files',
+    web_search: '🔍 Web Search',
+    install_package: '📦 Install Package',
+  }
+  return map[toolName] || toolName
+}
+
+function formatArgs(args: Record<string, unknown> | undefined): string {
+  if (!args) return ''
+  const key = Object.keys(args)[0]
+  if (!key) return ''
+  const val = String(args[key] || '').slice(0, 60)
+  return val
+}
+
+// ─── Direct Tool Execution ────────────────────────────────────────────────────
+
+export async function executeTool(
+  tool: string,
+  args: Record<string, unknown>,
+  sessionId: string,
+) {
+  return fetchAPI('/api/v1/execute', {
+    method: 'POST',
+    body: JSON.stringify({ tool, args, session_id: sessionId }),
+  })
+}
+
+// ─── Sandbox Info ─────────────────────────────────────────────────────────────
+
+export async function getSandboxInfo(sessionId: string) {
+  return fetchAPI(`/api/v1/sandbox/${sessionId}`)
+}
+
+// ─── Computer Use ─────────────────────────────────────────────────────────────
+
+export async function getComputerUseSteps(sessionId: string) {
+  return fetchAPI(`/api/v1/computer-use/${sessionId}`)
+}
+
+// ─── Spaces ──────────────────────────────────────────────────────────────────
 
 export async function getSpaces() {
   return fetchAPI('/api/v1/spaces')
 }
 
-// ─── Agents ─────────────────────────────────────────────────────────────────
+// ─── Agents ──────────────────────────────────────────────────────────────────
 
 export async function getAgents() {
   return fetchAPI('/api/v1/agents')
