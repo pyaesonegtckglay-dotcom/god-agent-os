@@ -605,33 +605,90 @@ def detect_intent(message: str) -> Dict[str, Any]:
 async def llm_generate_code(user_message: str) -> Optional[Tuple[str, str]]:
     """
     Ask LLM to produce executable code for the user's task.
+    Uses non-streaming completion (more reliable than streamed concat for code).
     Returns (language, code) or None.
     """
     sys_prompt = (
-        "You are a code generator. The user wants a task done by EXECUTING code. "
-        "Respond with ONLY a single fenced code block — no explanation. "
-        "Prefer Python. The code must be self-contained and print results to stdout. "
-        "Use real operations (e.g. write actual files under /home/user/ in the sandbox)."
+        "You are a precise code generator. The user wants a task DONE by executing code. "
+        "Respond with EXACTLY ONE fenced code block (```python ... ```), and NOTHING else — "
+        "no explanation, no preamble, no trailing text. "
+        "Code must be valid, self-contained, and PRINT results to stdout so the user can verify. "
+        "When the user asks for file operations, write under /home/user/ in the sandbox."
     )
     messages = [
         {"role": "system", "content": sys_prompt},
         {"role": "user", "content": user_message},
     ]
-    buf = ""
-    async for _name, tok in stream_llm(messages, temperature=0.1, max_tokens=1024):
-        buf += tok
-        if len(buf) > 8000:
-            break
-    m = CODE_BLOCK_RE.search(buf)
-    if not m:
-        # Some models forget the fence — treat raw as python if it looks code-ish
-        if buf.strip() and ("print(" in buf or "import " in buf or "open(" in buf):
-            return ("python", buf.strip())
-        return None
-    lang = (m.group(1) or "python").lower()
-    if lang in ("py", ""):
-        lang = "python"
-    return (lang, m.group(2).strip())
+
+    # Prefer non-streaming completion against the FIRST working provider — more
+    # reliable for short code outputs than re-assembling streamed deltas.
+    for p in PROVIDERS:
+        if not p["key"]:
+            continue
+        try:
+            buf = await _complete_once(p, messages, temperature=0.0, max_tokens=1024)
+            m = CODE_BLOCK_RE.search(buf or "")
+            if m:
+                lang = (m.group(1) or "python").lower()
+                if lang in ("py", ""):
+                    lang = "python"
+                return (lang, m.group(2).strip())
+            if buf and ("print(" in buf or "import " in buf or "open(" in buf):
+                return ("python", buf.strip())
+            # else try next provider
+        except Exception as e:
+            log.warning("code-gen provider failed", provider=p["name"], error=str(e)[:160])
+            continue
+    return None
+
+
+async def _complete_once(
+    provider: Dict[str, Any],
+    messages: List[Dict[str, str]],
+    temperature: float = 0.0,
+    max_tokens: int = 1024,
+) -> str:
+    """One-shot non-streaming completion (more reliable than concat for code)."""
+    name = provider["name"]
+    if name == "gemini":
+        # gemini supports non-stream via generateContent
+        contents: List[Dict[str, Any]] = []
+        system_text = ""
+        for m in messages:
+            if m.get("role") == "system":
+                system_text = m.get("content", "")
+                continue
+            contents.append({"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]})
+        body: Dict[str, Any] = {"contents": contents, "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}}
+        if system_text:
+            body["systemInstruction"] = {"parts": [{"text": system_text}]}
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{provider['model']}:generateContent?key={provider['key']}"
+        async with httpx.AsyncClient(timeout=60.0) as cli:
+            r = await cli.post(url, json=body)
+            r.raise_for_status()
+            d = r.json()
+            parts = d.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            return "".join(p.get("text", "") for p in parts)
+    if name == "anthropic":
+        msgs = [m for m in messages if m["role"] != "system"]
+        sys_text = next((m["content"] for m in messages if m["role"] == "system"), "")
+        payload: Dict[str, Any] = {"model": provider["model"], "max_tokens": max_tokens, "temperature": temperature, "messages": msgs}
+        if sys_text:
+            payload["system"] = sys_text
+        headers = {"x-api-key": provider["key"], "anthropic-version": "2023-06-01", "content-type": "application/json"}
+        async with httpx.AsyncClient(timeout=60.0) as cli:
+            r = await cli.post(provider["url"], json=payload, headers=headers)
+            r.raise_for_status()
+            d = r.json()
+            return "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
+    # OpenAI-compatible
+    payload = {"model": provider["model"], "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+    headers = {"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=60.0) as cli:
+        r = await cli.post(provider["url"], json=payload, headers=headers)
+        r.raise_for_status()
+        d = r.json()
+        return d["choices"][0]["message"]["content"] or ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
