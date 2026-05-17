@@ -8,7 +8,8 @@ const createTask = (goal: any, sessionId?: string) => fetchAPI('/api/v1/tasks/',
 const streamChatSSE = async (msgs: any[], sessionId: string, onChunk: (c: string) => void, onDone: (f: string) => void, onErr: (e: string) => void) => {
   try {
     const res = await fetchAPI('/api/v1/kernel/orchestrate', { method: 'POST', body: JSON.stringify({ message: msgs[msgs.length-1]?.content || '', session_id: sessionId }) })
-    onDone(res.result || 'Response received.')
+    // New backend returns {response, ...}; legacy returned {result}
+    onDone(res.response || res.result || 'Response received.')
   } catch(e: any) { onErr(e.message) }
 }
 import MessageBubble from './MessageBubble'

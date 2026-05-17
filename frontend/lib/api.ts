@@ -97,12 +97,13 @@ export async function streamOrchestrate(
   const controller = new AbortController()
 
   try {
-    const res = await fetch(`${base}/api/v1/chat`, {
+    // Use /api/v1/agent — intent router (chat OR real E2B execute)
+    const res = await fetch(`${base}/api/v1/agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        messages: [{ role: 'user', content: message }],
+        message,
         stream: true,
         session_id: sessionId,
       }),
@@ -431,6 +432,81 @@ export async function getAIStats() {
 
 export async function getPoolStatus() {
   return fetchAPI('/api/v1/ai/pool-status')
+}
+
+// ─── Direct execute (E2B sandbox, no LLM) ────────────────────────────────────
+
+export interface ExecuteEvent {
+  type: 'agent_start' | 'tool_executing' | 'sandbox_ready' | 'stdout' | 'stderr' | 'result' | 'tool_result' | 'agent_complete' | 'stream_end' | 'error'
+  data?: any
+  text?: string
+  sandbox_id?: string
+  backend?: string
+  exit_code?: number
+  success?: boolean
+  duration_ms?: number
+  session_id?: string
+  error?: string
+}
+
+/**
+ * Execute code directly in E2B sandbox with SSE streaming.
+ * Returns AbortController so caller can cancel.
+ */
+export async function executeCode(
+  opts: { language?: string; code: string; sessionId: string; timeout?: number },
+  onEvent: (ev: ExecuteEvent) => void,
+): Promise<AbortController> {
+  const base = getApiBase()
+  const controller = new AbortController()
+  try {
+    const res = await fetch(`${base}/api/v1/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        language: opts.language || 'python',
+        code: opts.code,
+        session_id: opts.sessionId,
+        timeout: opts.timeout || 60,
+        stream: true,
+      }),
+    })
+    if (!res.ok || !res.body) {
+      onEvent({ type: 'error', error: `HTTP ${res.status}` })
+      return controller
+    }
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        const t = line.trim()
+        if (!t.startsWith('data:')) continue
+        try {
+          const ev = JSON.parse(t.slice(5).trim())
+          onEvent(ev)
+        } catch {}
+      }
+    }
+  } catch (e: unknown) {
+    const msg = (e as Error).message || String(e)
+    if (!msg.includes('abort')) onEvent({ type: 'error', error: msg })
+  }
+  return controller
+}
+
+export async function killSandbox(sessionId: string) {
+  return fetchAPI(`/api/v1/sandbox/${sessionId}`, { method: 'DELETE' })
+}
+
+export async function getSandboxInfo(sessionId: string) {
+  return fetchAPI(`/api/v1/sandbox/${sessionId}`)
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────

@@ -1,107 +1,77 @@
 ---
-title: God Agent OS v8
+title: God Agent OS — Phase 1
 emoji: 🤖
 colorFrom: indigo
 colorTo: purple
 sdk: docker
 app_port: 7860
+app_file: backend/app.py
 pinned: true
 license: mit
-short_description: Autonomous Engineering OS v8 — KeyPool Multi-API (Gemini + SambaNova)
+short_description: Stable autonomous agent backend (LLM + E2B + SSE)
 ---
 
-# 🤖 GOD AGENT OS v8
-**Autonomous Engineering Operating System**
-*Manus + Genspark + Devin (OneHand) — KeyPool Multi-API Edition*
+# 🤖 God Agent OS — Phase 1 (Stability First)
 
-[![GitHub](https://img.shields.io/badge/GitHub-god--agent--os-blue?logo=github)](https://github.com/pyaesonegtckglay-dotcom/god-agent-os)
-[![Version](https://img.shields.io/badge/version-8.0.0-indigo)](https://github.com/pyaesonegtckglay-dotcom/god-agent-os)
-[![HF Space](https://img.shields.io/badge/HF%20Space-PYAE1994-orange)](https://huggingface.co/spaces/PYAE1994/autonomous-coding-system)
+A **clean, minimal, stable** autonomous AI agent backend.
+One pipeline, real execution, no fake Computer Use.
 
-## 🚀 What is God Agent OS v8?
-
-God Agent OS v8 is a fully autonomous AI engineering platform with **KeyPool Multi-API Routing**:
-- **Gemini** (6 keys) — Google Gemini 1.5 Flash primary LLM
-- **SambaNova** (9 keys) — Meta Llama 3.3 70B primary LLM
-- **GitHub API** (9 keys) — Pooled Git operations
-- **Automatic failover** across 7 providers
-
-## 🔑 v8 KeyPool System
+## Architecture
 
 ```
-Priority Chain:
-SambaNova (9 keys) → Gemini (6 keys) → OpenAI → Groq → Cerebras → OpenRouter → Anthropic
-
-Each key pool:
-- Round-robin key selection
-- Failure tracking per key
-- Automatic cooldown (60s after 3 failures)
-- Real-time status dashboard in UI
+Frontend (Vercel / Next.js)
+   ↓ HTTPS / SSE / WS
+Backend (HF Space — FastAPI)
+   ├─ /api/v1/chat      → LLM-only streaming  (SambaNova → Gemini → ...)
+   ├─ /api/v1/execute   → REAL E2B sandbox    (live stdout/stderr)
+   ├─ /api/v1/agent     → Intent router (chat OR execute)
+   └─ /ws/{session_id}  → Same events mirrored over WebSocket
 ```
 
-## 🤖 16-Agent Fleet
+## Endpoints
 
-| Agent | Capability | Status |
-|-------|-----------|--------|
-| 🧠 Orchestrator | Central brain, routes tasks | Core |
-| 📋 Planner | Task decomposition & planning | Core |
-| 💻 Coding | Production code generation | Core |
-| 🐛 Debug | Self-healing error resolution | Core |
-| 🌐 Browser | Web research & scraping | v7 |
-| 📁 File | File system & project scaffold | v7 |
-| 🔀 Git | Git ops & GitHub PR creation | v7 |
-| 🧪 Test | Auto test generation & execution | v7 |
-| 🎨 Vision | Design-to-code UI generation | v7 |
-| 🖥️ Sandbox | Isolated code execution | Core |
-| 🚀 Deploy | Auto-deploy to cloud | Core |
-| 🔌 Connector | External integrations | Core |
-| 🧠 Memory | Long-term context | Core |
-| ⚙️ Workflow | n8n automation | Core |
-| 🔍 Reasoning | Deep reasoning & analysis | Core |
-| 🎨 UI | Real-time UI state | Core |
+| Method | Path | Purpose |
+|---|---|---|
+| GET  | `/health` | Health + provider availability + E2B status |
+| POST | `/api/v1/chat` | LLM-only SSE chat (no sandbox) |
+| POST | `/api/v1/execute` | Real E2B execution, streams stdout/stderr |
+| POST | `/api/v1/agent` | Intent-routed: chat OR execute |
+| POST | `/api/v1/orchestrate` | Alias of `/api/v1/agent` |
+| POST | `/api/v1/kernel/orchestrate` | Legacy non-streaming alias |
+| GET  | `/api/v1/sandbox/{session_id}` | Sandbox info |
+| DEL  | `/api/v1/sandbox/{session_id}` | Kill sandbox |
+| WS   | `/ws/{session_id}` | WebSocket events |
 
-## 🔑 API Keys Configuration
+## Required HF Space Secrets
 
-Set these in Hugging Face Space → Settings → Variables:
+| Variable | Required? | Purpose |
+|---|---|---|
+| `E2B_API_KEY` | **YES** | Real sandbox runtime |
+| `SAMBANOVA_KEY` | one of these | Llama 3.3 70B (recommended, fastest) |
+| `GEMINI_KEY`    | one of these | Gemini 2.0 Flash |
+| `GITHUB_KEY`    | one of these | GitHub Models (GPT-4o-mini) |
+| `OPENAI_API_KEY`| one of these | OpenAI |
+| `GROQ_API_KEY`  | one of these | Groq (Llama) |
+| `ANTHROPIC_API_KEY` | one of these | Claude |
 
-| Variable | Description | Keys |
-|----------|-------------|------|
-| `GEMINI_API_KEYS` | Google Gemini (comma-separated) | 6 keys |
-| `SAMBANOVA_API_KEYS` | SambaNova (comma-separated) | 9 keys |
-| `GITHUB_API_KEYS` | GitHub API (comma-separated) | 9 keys |
-| `OPENAI_API_KEY` | GPT-4o | Optional |
-| `GROQ_API_KEY` | Llama 3.3 70B (Free) | Optional |
-| `ANTHROPIC_API_KEY` | Claude 3.5 | Optional |
+## Quick Proof Test
 
-## 🌐 API Documentation
-
-- Interactive docs: `/api/docs`
-- Health check: `/health`
-- AI Router stats: `/api/v1/ai/stats`
-- Key pool status: `/api/v1/ai/pool-status`
-
-## 📦 Architecture
-
-```
-god-agent-os/
-├── backend/
-│   ├── agents/         # 16 specialized agents
-│   ├── ai_router/
-│   │   ├── key_pool.py    # KeyPool multi-key manager (NEW v8)
-│   │   ├── router_v8.py   # AIRouterV8 with KeyPool (NEW v8)
-│   │   └── router.py      # Legacy router (retained)
-│   ├── api/            # REST + WebSocket endpoints
-│   ├── core/           # Task engine & models
-│   ├── memory/         # SQLite persistent memory
-│   ├── connectors/     # External service connectors
-│   ├── main_v8.py      # v8 Entry point (NEW)
-│   └── Dockerfile.hf   # HF Spaces Docker
-└── frontend/           # Next.js 14 UI
-    └── components/
-        └── layout/
-            └── AIRouterPanel.tsx  # v8 Key pool status UI (NEW)
+```bash
+curl -sN -X POST https://pyae1994-autonomous-coding-system.hf.space/api/v1/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"language":"python","code":"import time,pathlib; p=pathlib.Path(\"/home/user/proof.txt\"); ts=int(time.time()); p.write_text(str(ts)); print(\"TS:\",ts,\"READBACK:\",p.read_text())","session_id":"smoke","stream":true}'
 ```
 
-## 🔄 Auto-Deploy Pipeline
+Expected: live SSE stream of `sandbox_ready` → `stdout` → `result` events.
 
-GitHub Push → Build Check → HF Space Deploy + Vercel Deploy
+## Phase Roadmap
+
+- **Phase 1 (current)** — chat + execute + SSE/WS, stable.
+- **Phase 2** — browser automation, retry/self-repair loops.
+- **Phase 3** — workflows, memory, multi-agent.
+
+## Powered by
+
+OpenHands ideas · E2B · SambaNova/Gemini · Vercel · HuggingFace Spaces
+
+Built by **Pyae Sone**.
